@@ -565,8 +565,8 @@ export const SCHOOLS = [
     rank: 16,
     city: 'Nashville, TN',
     admit: { rate: 0.0408, applicants: 56447, admitted: 2302, cls: 2030 },
-    early: { plan: 'ED', label: 'Early Decision I & II (binding)', binding: true, restrictive: true, rate: 0.119, cls: 2030 },
-    rd: { rate: 0.030, estimated: true },
+    early: { plan: 'ED', label: 'Early Decision I & II (binding)', binding: true, restrictive: true, rate: 0.119, applicants: 7727, admitted: 920, cls: 2030 },
+    rd: { rate: 0.0284, applicants: 48720, admitted: 1382, cls: 2030 },
     tests: { policy: 'optional', sat: [1510, 1560], act: [34, 35], note: 'Test-optional through fall 2027 entry; required again from the 2028–29 cycle.' },
     legacy: 'moderate',
     interview: 'none',
@@ -577,12 +577,14 @@ export const SCHOOLS = [
     poolShift: 0,
     facts: [
       'Class of 2030 admit rate of 4.08% (2,302 of 56,447) was the lowest in Vanderbilt history.',
-      'Early Decision admitted 11.9% for the Class of 2030, down from 13.2% a year earlier.',
+      'Early Decision admitted 11.9% (920 of 7,727) for the Class of 2030, down from 13.2% a year earlier.',
+      'Regular decision admitted a record-low 2.8% (1,382 of 48,720). Because ED fills about 40% of the class, Vanderbilt\'s regular round is about as hard as Stanford\'s or Yale\'s even though its overall rate is higher.',
       'Rates demonstrated interest "not considered".',
     ],
     sources: [
       { label: 'Vanderbilt Hustler: ED rate down to 11.9% for the Class of 2030', url: 'https://vanderbilthustler.com/2026/02/17/early-decision-acceptance-rate-down-to-11-9-for-class-of-2030/' },
       { label: 'Vanderbilt Admissions: Class of 2030 regular decision by the numbers', url: 'https://admissions.vanderbilt.edu/vandybloggers/2026/04/class-of-2030-regular-decision-by-the-numbers/' },
+      { label: 'Vanderbilt Admissions: Class of 2030 early decision by the numbers', url: 'https://admissions.vanderbilt.edu/vandybloggers/2026/02/class-of-2030-early-decision-by-the-numbers/' },
     ],
   },
   {

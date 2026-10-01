@@ -25,7 +25,7 @@ const ESSAY_DIMS = [
 ];
 const ESSAY_ANCHORS = { 1: 'Weak', 2: 'Below average', 3: 'Solid', 4: 'Strong', 5: 'Exceptional' };
 
-const act = (name, category, tier, years, hours) => ({ name, category, tier, years, hours });
+const act = (name, category, tier, years, hours, extra = {}) => ({ name, category, tier, years, hours, ...extra });
 
 // A clearly labelled sample so the page opens in a working state.
 const EXAMPLE = {
@@ -34,17 +34,17 @@ const EXAMPLE = {
   trend: 'steady', limitedOfferings: false, beyondCurriculum: false,
   testType: 'sat', testScore: 1530,
   activities: [
-    act('Debate team captain, state semifinalist', 'Debate/Speech', 2, 4, 8),
-    act('Founder, free middle-school tutoring program (40 students)', 'Community Service (Volunteer)', 3, 3, 4),
-    act('Research assistant, university neuroscience lab', 'Research', 3, 2, 6),
-    act('Varsity tennis', 'Athletics: JV/Varsity', 4, 4, 10),
-    act('Part-time job at a bakery', 'Work (Paid)', 4, 2, 8),
-    act('Hospital volunteer', 'Community Service (Volunteer)', 4, 2, 3),
+    act('Debate team captain, state semifinalist', 'Debate/Speech', 2, 4, 8, { example: true }),
+    act('Founder, free middle-school tutoring program (40 students)', 'Community Service (Volunteer)', 3, 3, 4, { example: true }),
+    act('Research assistant, university neuroscience lab', 'Research', 3, 2, 6, { example: true }),
+    act('Varsity tennis', 'Athletics: JV/Varsity', 4, 4, 10, { example: true }),
+    act('Part-time job at a bakery', 'Work (Paid)', 4, 2, 8, { example: true }),
+    act('Hospital volunteer', 'Community Service (Volunteer)', 4, 2, 3, { example: true }),
   ],
   honors: [
-    { name: 'National Merit Semifinalist', level: 'national' },
-    { name: 'State debate tournament semifinalist', level: 'state' },
-    { name: 'AP Scholar with Distinction', level: 'school' },
+    { name: 'National Merit Semifinalist', level: 'national', example: true },
+    { name: 'State debate tournament semifinalist', level: 'state', example: true },
+    { name: 'AP Scholar with Distinction', level: 'school', example: true },
   ],
   research: 'mentored', program: 'selective', workHours: '6', internship: 'none', venture: 'started', portfolio: 'none',
   essay: { voice: 4, specificity: 4, reflection: 3, craft: 4, fit: 3, supplements: 3 },
@@ -52,7 +52,7 @@ const EXAMPLE = {
   interview: 'strong', interest: 'some',
   residency: 'us', major: 'socsci', firstGen: false, lowIncome: false, rural: false, hardship: false,
   legacy: [], athlete: [], donor: [], earlyChoice: 'penn',
-  essayText: '', essayGrade: null, supplements: {},
+  essayText: '', essayGrade: null, supplements: {}, sources: [],
 };
 
 const BLANK = {
@@ -68,7 +68,7 @@ const BLANK = {
   interview: 'none', interest: 'some',
   residency: 'us', major: 'undecided', firstGen: false, lowIncome: false, rural: false, hardship: false,
   legacy: [], athlete: [], donor: [], earlyChoice: '',
-  essayText: '', essayGrade: null, supplements: {},
+  essayText: '', essayGrade: null, supplements: {}, sources: [],
 };
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -314,6 +314,7 @@ function readForm(e) {
     const list = state[t.dataset.list];
     const item = list[Number(t.dataset.index)];
     if (item) {
+      delete item.example;
       item[t.dataset.key] = t.type === 'number' || t.dataset.key === 'tier' ? numOrBlank(t.value) : t.value;
       if (t.dataset.key === 'hours') item.hoursEstimated = false;
     }
@@ -488,6 +489,20 @@ function schoolFacts(s) {
   return `<dl class="facts">${rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
 }
 
+// Where a school's regular round and overall rate rank among the 22 (1 = hardest).
+function difficultyHtml(s, profile) {
+  const rdOf = (x) => (x.residency ? x.residency[profile.residency] ?? x.rd.rate : x.rd.rate);
+  const overallOf = (x) => (x.residency ? x.residency[profile.residency] ?? x.admit.rate : x.admit.rate);
+  const rank = (fn) => 1 + SCHOOLS.filter((x) => fn(x) < fn(s)).length;
+  const rdRank = rank(rdOf);
+  const allRank = rank(overallOf);
+  const ord = (n) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`;
+  const gap = s.early && allRank - rdRank >= 4
+    ? ` ${esc(s.short)} fills much of its class early, so its regular round is harder than its overall rate suggests.`
+    : '';
+  return `<p class="micro difficulty">Regular round: ${fmtRate(rdOf(s))}${s.rd.estimated && !s.residency ? ' (est.)' : ''}, the ${ord(rdRank)} hardest of the ${SCHOOLS.length}. Overall admit rate: ${ord(allRank)} hardest.${gap}</p>`;
+}
+
 function schoolDetail(r, profile) {
   const s = r.school;
   const earlyNum = r.early
@@ -502,6 +517,7 @@ function schoolDetail(r, profile) {
     ${testAdviceHtml(r, profile)}
     ${athleteNote(r)}
     ${r.missingTest ? '' : `<div class="detail-block"><h4>What moved your odds${round === r.early ? ` (${esc(s.early.plan)})` : ''}, compared with a typical applicant</h4><div class="contrib">${contribChart(r, round)}</div></div>`}
+    ${difficultyHtml(s, profile)}
     ${supplementsHtml(r)}
     <div class="detail-block"><h4>${esc(s.name)}</h4>${schoolFacts(s)}</div>
     <a href="#school-${s.id}" class="micro">Full school profile and sources</a>`;
@@ -909,14 +925,11 @@ function openFilePicker(target) {
   input.click();
 }
 
-async function readFileForImport(file, kind) {
-  if (isImage(file)) {
-    if (!aiReady() || !ai.images) throw new Error(`${file.name}: photos can only be read when Claude is available. Upload a PDF, Word or text file instead.`);
-    const data = await askClaudeJson(`${AI_EXTRACT_PROMPT('(The document is the attached image of a page.)', kind)}`, { images: [file] });
-    return { data: sanitizeImport(data), via: 'claude' };
-  }
-  const text = await fileToText(file);
-  if (!text.trim()) throw new Error(`${file.name}: no text found. A scanned PDF needs to be a photo upload with Claude, or retyped.`);
+const RESUME_KEYS = ['research', 'program', 'workHours', 'internship', 'venture', 'portfolio'];
+const MAX_SOURCE_CHARS = 150000;
+
+// Parse already-extracted text from a file.
+async function parseSource(text, kind) {
   const type = kind === 'essay' ? 'essay' : kind === 'auto' ? classifyText(text) : 'list';
   if (type === 'essay') return { data: { activities: [], honors: [], resume: null, essays: [text.trim()] }, via: 'local' };
   if (aiReady()) {
@@ -930,23 +943,49 @@ async function readFileForImport(file, kind) {
   return { data: { ...parseProfileText(text, kind), essays: [] }, via: 'local' };
 }
 
-async function importFiles(files, kind) {
-  if (!files.length) return;
+async function readFileForImport(file, kind) {
+  if (isImage(file)) {
+    if (!aiReady() || !ai.images) throw new Error(`${file.name}: photos can only be read when Claude is available. Upload a PDF, Word or text file instead.`);
+    const data = await askClaudeJson(`${AI_EXTRACT_PROMPT('(The document is the attached image of a page.)', kind)}`, { images: [file] });
+    return { data: sanitizeImport(data), via: 'claude', text: null };
+  }
+  const text = await fileToText(file);
+  if (!text.trim()) throw new Error(`${file.name}: no text found. A scanned PDF needs to be a photo upload with Claude, or retyped.`);
+  return { ...(await parseSource(text, kind)), text };
+}
+
+// Example rows carry a flag; rows saved before the flag existed are matched by name.
+const EXAMPLE_NAMES = new Set([...EXAMPLE.activities, ...EXAMPLE.honors].map((x) => x.name));
+const isExampleItem = (x) => x.example || EXAMPLE_NAMES.has(x.name);
+
+function rememberSource(name, kind, text) {
+  if (!text) return;
+  const sources = (state.sources || []).filter((x) => !(x.name === name && x.kind === kind));
+  sources.push({ name, kind, text: text.slice(0, MAX_SOURCE_CHARS) });
+  let total = 0;
+  state.sources = sources.reverse().filter((x) => (total += x.text.length) <= MAX_SOURCE_CHARS * 2).reverse();
+}
+
+// items: [{ name, kind, file } | { name, kind, text }]
+async function runImport(items, { reparse = false } = {}) {
+  if (!items.length) return;
   const log = $('#import-log');
   const startSnapshot = clone(state);
-  if (state.example) {
-    Object.assign(state, {
-      example: false, activities: [], honors: [], research: 'none', program: 'none', workHours: '0',
-      internship: 'none', venture: 'none', portfolio: 'none',
-    });
+  if (state.example || reparse) {
+    Object.assign(state, { example: false, activities: [], honors: [], ...Object.fromEntries(RESUME_KEYS.map((k) => [k, BLANK[k]])) });
+  } else {
+    state.activities = state.activities.filter((a) => !isExampleItem(a));
+    state.honors = state.honors.filter((h) => !isExampleItem(h));
   }
-  log.innerHTML = [...files].map((f, i) => `<li id="import-${i}" class="pending">${esc(f.name)}: reading…</li>`).join('');
+  log.innerHTML = items.map((f, i) => `<li id="import-${i}" class="pending">${esc(f.name)}: ${reparse ? 're-reading' : 'reading'}…</li>`).join('');
   let changed = false;
   let essayToGrade = false;
-  for (const [i, file] of [...files].entries()) {
+  for (const [i, item] of items.entries()) {
     const li = $(`#import-${i}`);
+    const kind = item.kind;
     try {
-      const { data, via, warning } = await readFileForImport(file, kind);
+      const { data, via, warning, text } = item.file ? await readFileForImport(item.file, kind) : await parseSource(item.text, kind);
+      if (item.file) rememberSource(item.name, kind, text);
       const parts = [];
       const warnings = warning ? [warning] : [];
       if (kind !== 'honors' && kind !== 'essay' && data.activities.length) {
@@ -967,37 +1006,62 @@ async function importFiles(files, kind) {
         parts.push(`${state.honors.length - before} honors`);
       }
       if ((kind === 'auto' || kind === 'resume') && data.resume) {
-        const cur = Object.fromEntries(['research', 'program', 'workHours', 'internship', 'venture', 'portfolio'].map((k) => [k, state[k]]));
+        const cur = Object.fromEntries(RESUME_KEYS.map((k) => [k, state[k]]));
         const merged = mergeResume(cur, data.resume);
         const updated = Object.keys(merged).filter((k) => merged[k] !== cur[k]);
         Object.assign(state, merged);
         if (updated.length) parts.push(`resume details (${updated.length})`);
       }
       if (data.essays?.length && (kind === 'auto' || kind === 'essay' || kind === 'resume')) {
-        state.essayText = data.essays[0];
-        state.essayGrade = null;
-        essayToGrade = true;
+        if (state.essayText !== data.essays[0]) {
+          state.essayText = data.essays[0];
+          state.essayGrade = null;
+          essayToGrade = true;
+        }
         parts.push('personal statement');
       }
       changed = changed || parts.length > 0;
       li.className = parts.length ? 'good' : 'warn';
       li.textContent = parts.length
-        ? `${file.name}: added ${parts.join(', ')}${via === 'claude' ? ' (read by Claude)' : ''}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`
-        : `${file.name}: nothing new found. Check that it's a resume, list or essay.`;
+        ? `${item.name}: added ${parts.join(', ')}${via === 'claude' ? ' (read by Claude)' : ''}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`
+        : `${item.name}: nothing new found. Check that it's a resume, list or essay.`;
     } catch (e) {
       li.className = 'bad';
-      li.textContent = e?.code ? `${file.name}: ${aiErrorText(e)}` : e.message || `${file.name}: could not be read.`;
+      li.textContent = e?.code ? `${item.name}: ${aiErrorText(e)}` : e.message || `${item.name}: could not be read.`;
     }
   }
-  if (changed) {
+  if (changed || reparse) {
     undoSnapshot = startSnapshot;
     $('#undo-import').hidden = false;
   } else if (startSnapshot.example) {
     state = startSnapshot;
   }
   writeForm();
+  renderSources();
   scheduleRender();
   if (essayToGrade) gradePersonalStatement();
+}
+
+function importFiles(files, kind) {
+  return runImport([...files].map((file) => ({ name: file.name, kind, file })));
+}
+
+// Start over from the saved file text: clears activities, honors and resume
+// fields, then reads every saved file again.
+function reparseSources() {
+  const sources = state.sources || [];
+  if (!sources.length) return;
+  return runImport(sources.map((x) => ({ name: x.name, kind: x.kind, text: x.text })), { reparse: true });
+}
+
+function renderSources() {
+  const box = $('#import-sources');
+  const sources = state.sources || [];
+  box.hidden = !sources.length;
+  if (!sources.length) return;
+  $('#source-list').innerHTML = sources
+    .map((x, i) => `<li><span>${esc(x.name)}</span><span class="micro">${esc(x.kind === 'auto' ? 'any section' : x.kind)}</span><button type="button" class="btn icon" data-forget-source="${i}" aria-label="Forget ${esc(x.name)}">✕</button></li>`)
+    .join('');
 }
 
 async function importIntoSupplement(file, id, i) {
@@ -1105,12 +1169,12 @@ function bind() {
   });
 
   $('#load-example').addEventListener('click', () => {
-    state = clone(EXAMPLE);
+    state = { ...clone(EXAMPLE), sources: state.sources || [] };
     writeForm();
     scheduleRender();
   });
   $('#clear-form').addEventListener('click', () => {
-    state = clone(BLANK);
+    state = { ...clone(BLANK), sources: state.sources || [] };
     writeForm();
     scheduleRender();
   });
@@ -1159,6 +1223,14 @@ function bind() {
     scheduleRender();
   });
   $('#grade-essay').addEventListener('click', gradePersonalStatement);
+  $('#reparse-sources').addEventListener('click', reparseSources);
+  $('#source-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-forget-source]');
+    if (!b) return;
+    state.sources.splice(Number(b.dataset.forgetSource), 1);
+    saveState();
+    renderSources();
+  });
 
   // Supplements inside each school's detail panel
   const schoolList = $('#school-list');
@@ -1210,6 +1282,7 @@ function init() {
   bind();
   route();
   renderAiNote();
+  renderSources();
   renderResults();
   initAI();
 }

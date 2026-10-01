@@ -49,7 +49,15 @@
             </div>
             <p class="micro" id="ai-note"></p>
             <ul class="import-log" id="import-log"></ul>
-            <button type="button" class="btn ghost" id="undo-import" hidden>Undo last import</button>
+            <div class="import-sources" id="import-sources" hidden>
+              <p class="sub-label">Your files</p>
+              <ul id="source-list" class="source-list"></ul>
+              <p class="micro">Re-parse clears the activities, honors and resume fields and reads these files again from scratch, including after you fix a file or when Claude becomes available. Your grades, scores and essays stay. The file text is saved only in this browser.</p>
+            </div>
+            <div class="import-buttons">
+              <button type="button" class="btn primary" id="reparse-sources">Re-parse my files</button>
+              <button type="button" class="btn ghost" id="undo-import" hidden>Undo last import</button>
+            </div>
           </section>
 
           <fieldset class="section" id="sec-academics">

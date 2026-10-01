@@ -22,6 +22,9 @@ export const MODEL = {
   gradeGate: { threshold: 4.5, slope: 0.9, ucSlope: 1.1 },
   ucGpaWeight: 1.5,
   hookShare: { strong: 0.82, moderate: 0.86, light: 0.9, none: 0.93 },
+  // No legacy preference but a large Division I recruiting class (Stanford):
+  // recruits are 10–15% of Ivy-Plus classes (Opportunity Insights).
+  hookShareNoLegacyD1: 0.88,
   ucHookShare: 0.97,
   earlyExponent: { binding: 0.55, restrictive: 0.4, open: 0.3 },
   earlyMultCap: 2.6,
@@ -443,7 +446,11 @@ function calibration(school, profile) {
   const rate = baseRdRate(school, profile);
   const key = `${school.id}:${rate}`;
   if (!calibrationCache.has(key)) {
-    const share = school.residency ? MODEL.ucHookShare : MODEL.hookShare[school.legacy] ?? 0.9;
+    const share = school.residency
+      ? MODEL.ucHookShare
+      : school.legacy === 'none' && school.athletics === 'D1'
+        ? MODEL.hookShareNoLegacyD1
+        : MODEL.hookShare[school.legacy] ?? 0.9;
     const ceiling = Math.min(ceilingFor(rate), school.maxChance ?? 1);
     calibrationCache.set(key, { rate, ceiling, alpha: calibrateAlpha(rate * share, ceiling), unhooked: rate * share });
   }

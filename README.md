@@ -135,7 +135,7 @@ Latest published figures as of October 2026 (Class of 2030 where released, other
 | 14 | Cornell University | 9.2% (2030) | ED 18.8% | 6.7% | 1490–1550 | Required | Yes |
 | 16 | Brown University | 5.3% (2030) | ED 16.5% | 3.9% | 1470–1550 | Required | Yes |
 | 16 | Rice University | 7.7% (2030) | ED 13.2% | 7.3% | 1510–1560 | Optional | Yes, minor |
-| 16 | Vanderbilt University | 4.1% (2030) | ED 11.9% | 3.0% (est.) | 1510–1560 | Optional | Yes |
+| 16 | Vanderbilt University | 4.1% (2030) | ED 11.9% | 2.8% | 1510–1560 | Optional | Yes |
 | 16 | Washington University in St. Louis | 12.2% (2030) | ED 25% | 8.0% (est.) | 1500–1550 | Optional | Yes, minor |
 | 20 | University of California, Berkeley | 10.5% (2030) | — | CA 12.4% · U.S. 10.0% · intl 5.4% | — | Test-blind | No |
 | 20 | University of California, Los Angeles | 10.8% (2030) | — | CA 10.2% · U.S. 14.9% · intl 8.1% | — | Test-blind | No |
