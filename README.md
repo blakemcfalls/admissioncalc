@@ -95,7 +95,12 @@ npm test             # model unit tests (node:test, Node 18+)
    legacies and donor cases were ~5% of Harvard's applicants but ~30% of admits). A ceiling keeps
    even a perfect file below roughly 40–60% at the most selective schools. A grade gate adds a
    penalty when grades fall below the usual admit range.
-4. **Odds adjustments.**
+4. **Applicant pool strength.** No school publishes its applicants' credentials, so each pool is
+   estimated from the enrolled SAT midpoint (40%, test-optional schools discounted 10 points),
+   selectivity (35%) and yield (25%), standardized across the 22. A stronger pool raises the
+   "typical applicant" benchmark by up to 0.6 rating points for everything except test scores.
+   Caltech, Stanford, Harvard and MIT come out strongest; the UCs, Notre Dame and WashU broadest.
+5. **Odds adjustments.**
    - Early rounds: (early odds ÷ RD odds) raised to 0.55 for binding ED, 0.4 for restrictive EA and
      0.3 for open EA, capped at ×2.6, because early pools are full of recruited athletes and legacies.
    - Legacy ×3 / ×2 / ×1.4 by how much the school weighs it (+25% when applying early); none at MIT,
@@ -106,7 +111,7 @@ npm test             # model unit tests (node:test, Node 18+)
    - Intended major where admission is by program (UCLA CS 3%, Berkeley CS 7%, CMU SCS ~5%),
      plus a smaller fit estimate for non-STEM interests at MIT and Caltech.
    - Demonstrated interest only at Duke, Dartmouth, Northwestern, Rice and WashU.
-5. **Range.** The likely range adds and subtracts 0.6 in log-odds for the uncertainty in rating
+6. **Range.** The likely range adds and subtracts 0.6 in log-odds for the uncertainty in rating
    your own essays and recommendations.
 
 All parameters live in `MODEL` at the top of [`js/model.js`](js/model.js).

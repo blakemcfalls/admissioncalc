@@ -21,6 +21,10 @@ export const MODEL = {
   // each rating point costs this much extra log-odds, more at the UCs.
   gradeGate: { threshold: 4.5, slope: 0.9, ucSlope: 1.1 },
   ucGpaWeight: 1.5,
+  // Applicant-pool strength, in rating points added to the "typical applicant"
+  // benchmark for the non-test parts of the file (tests are already compared
+  // with each school's own range).
+  pool: { weights: { sat: 0.4, selectivity: 0.35, yield: 0.25 }, scale: 0.35, cap: 0.6, optionalSatDiscount: 10 },
   hookShare: { strong: 0.82, moderate: 0.86, light: 0.9, none: 0.93 },
   // No legacy preference but a large Division I recruiting class (Stanford):
   // recruits are 10–15% of Ivy-Plus classes (Opportunity Insights).
@@ -366,6 +370,50 @@ export const COMPONENTS = [
 
 const isUC = (school) => school.tests?.policy === 'blind';
 
+// ---------------------------------------------------------------- applicant pools
+// No school publishes its applicants' credentials, so pool strength is
+// estimated from three published signals, each standardized across the 22:
+//   - enrolled SAT midpoint (test-optional schools discounted 10 points,
+//     because only higher scorers report),
+//   - selectivity, as -log(overall admit rate),
+//   - yield (where the strongest admits choose to enroll).
+// The weighted index (signals a school lacks are dropped) becomes a shift of up
+// to ±0.6 rating points in what counts as a typical applicant there.
+function zScores(values) {
+  const xs = values.filter((v) => v != null);
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length) || 1;
+  return values.map((v) => (v == null ? null : (v - mean) / sd));
+}
+
+export function computePoolStrengths(schools = SCHOOLS) {
+  const p = MODEL.pool;
+  const sat = zScores(schools.map((s) => (s.tests?.sat ? (s.tests.sat[0] + s.tests.sat[1]) / 2 - (s.tests.policy === 'optional' ? p.optionalSatDiscount : 0) : null)));
+  const sel = zScores(schools.map((s) => -Math.log(s.admit.rate)));
+  const yld = zScores(schools.map((s) => s.admit.yield ?? null));
+  const out = {};
+  schools.forEach((s, i) => {
+    const parts = [[sat[i], p.weights.sat], [sel[i], p.weights.selectivity], [yld[i], p.weights.yield]].filter(([z]) => z != null);
+    const w = parts.reduce((a, [, wt]) => a + wt, 0);
+    const index = parts.reduce((a, [z, wt]) => a + z * wt, 0) / w;
+    out[s.id] = { index, strength: clamp(index * p.scale, -p.cap, p.cap), signals: parts.length };
+  });
+  const ranked = Object.entries(out).sort((a, b) => b[1].index - a[1].index);
+  ranked.forEach(([id], i) => {
+    out[id].rank = i + 1;
+  });
+  return out;
+}
+
+export const POOLS = computePoolStrengths();
+
+export function poolLabel(rank, n = SCHOOLS.length) {
+  if (rank <= Math.ceil(n * 0.2)) return 'Among the strongest';
+  if (rank <= Math.ceil(n * 0.45)) return 'Stronger than most here';
+  if (rank <= Math.ceil(n * 0.7)) return 'Typical for this list';
+  return 'Broader than most here';
+}
+
 function schoolWeights(school, opts) {
   const c = school.c7;
   const uc = isUC(school);
@@ -573,7 +621,11 @@ export function scoreSchool(school, profile, base = profileRatings(profile)) {
   }
 
   const cal = calibration(school, profile);
-  const z = (R - 5) / MODEL.poolSd + (school.poolShift || 0);
+  // Stronger pools raise the bar for the non-test parts of the file.
+  const pool = POOLS[school.id] ?? { strength: 0 };
+  const sumW = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
+  const testShare = (weights.tests || 0) / sumW;
+  const z = (R - 5 - pool.strength * (1 - testShare)) / MODEL.poolSd;
 
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
   const contributions = COMPONENTS.map(([key, label]) => {
@@ -623,6 +675,8 @@ export function scoreSchool(school, profile, base = profileRatings(profile)) {
     earlyMult: earlyMultiplier(school),
     athlete: has(profile.athlete, school.id),
     supplementGrades,
+    pool,
+    poolLogOdds: (-MODEL.beta * pool.strength * (1 - testShare)) / MODEL.poolSd,
   };
 }
 

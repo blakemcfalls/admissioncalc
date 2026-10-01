@@ -244,3 +244,14 @@ test('essay check flags length, clichés and missing reflection', () => {
   const long = checkEssay('word '.repeat(700));
   assert.ok(long.notes.some((n) => n.level === 'bad'));
 });
+
+test('applicant pool strength is estimated from published signals', async () => {
+  const { POOLS } = await import('../js/model.js');
+  assert.equal(Object.keys(POOLS).length, 22);
+  for (const id of ['harvard', 'stanford', 'mit', 'caltech']) assert.ok(POOLS[id].rank <= 5, id);
+  assert.ok(POOLS.harvard.strength > POOLS.notredame.strength);
+  for (const p of Object.values(POOLS)) assert.ok(Math.abs(p.strength) <= 0.6);
+  const r = scoreAll(STRONG);
+  assert.ok(byId(r, 'harvard').poolLogOdds < 0, 'a strong pool lowers the odds');
+  assert.ok(byId(r, 'ucla').poolLogOdds > 0, 'a broad pool raises them');
+});

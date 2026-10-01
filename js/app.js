@@ -3,7 +3,7 @@ import {
 } from './schools.js';
 import {
   MODEL, MAJORS, ACTIVITY_CATEGORIES, ACTIVITY_TIERS, HONOR_LEVELS, REC_LEVELS, INTERVIEW_LEVELS,
-  scoreAll, profileSummary, readerBand, describeRating, earlyPlanNotes, satEquivalent,
+  scoreAll, profileSummary, readerBand, describeRating, earlyPlanNotes, satEquivalent, POOLS, poolLabel,
 } from './model.js';
 import { checkEssay } from './essay-check.js';
 import { gradeEssay, aiGradePrompt, normalizeGrade } from './grader.js';
@@ -427,6 +427,9 @@ function contribChart(result, round) {
   const rows = result.contributions
     .filter((c) => c.used)
     .map((c) => ({ label: c.label, lo: c.logOdds, note: `rated ${c.rating.toFixed(1)}` }));
+  if (Math.abs(result.poolLogOdds) > 0.01) {
+    rows.push({ label: result.poolLogOdds < 0 ? 'Stronger applicant pool' : 'Broader applicant pool', lo: result.poolLogOdds, note: 'applicant pool strength' });
+  }
   for (const [label, m] of round.adjustments) rows.push({ label, lo: Math.log(m), note: 'odds adjustment' });
   if (result.athlete) {
     const d1 = result.school.athletics === 'D1';
@@ -500,7 +503,8 @@ function difficultyHtml(s, profile) {
   const gap = s.early && allRank - rdRank >= 4
     ? ` ${esc(s.short)} fills much of its class early, so its regular round is harder than its overall rate suggests.`
     : '';
-  return `<p class="micro difficulty">Regular round: ${fmtRate(rdOf(s))}${s.rd.estimated && !s.residency ? ' (est.)' : ''}, the ${ord(rdRank)} hardest of the ${SCHOOLS.length}. Overall admit rate: ${ord(allRank)} hardest.${gap}</p>`;
+  const pool = POOLS[s.id];
+  return `<p class="micro difficulty">Regular round: ${fmtRate(rdOf(s))}${s.rd.estimated && !s.residency ? ' (est.)' : ''}, the ${ord(rdRank)} hardest of the ${SCHOOLS.length}. Overall admit rate: ${ord(allRank)} hardest.${gap} Applicant pool: ${esc(poolLabel(pool.rank).toLowerCase())} (${ord(pool.rank)} of ${SCHOOLS.length}, estimated).</p>`;
 }
 
 function schoolDetail(r, profile) {
@@ -602,7 +606,7 @@ function renderSchoolData() {
   const head = `<thead><tr>
       <th scope="col">Rank</th><th scope="col">School</th><th scope="col">Admit rate</th><th scope="col">Applicants</th>
       <th scope="col">Early round</th><th scope="col">Regular</th><th scope="col">SAT mid-50%</th><th scope="col">ACT</th>
-      <th scope="col">Testing 2026–27</th><th scope="col">Legacy</th><th scope="col">Interest</th></tr></thead>`;
+      <th scope="col">Testing 2026–27</th><th scope="col">Yield</th><th scope="col">Applicant pool</th><th scope="col">Legacy</th><th scope="col">Interest</th></tr></thead>`;
   const rows = SCHOOLS.map((s) => {
     const est = (x) => (x?.estimated ? ' <span class="est">est.</span>' : '');
     return `<tr>
@@ -615,6 +619,8 @@ function renderSchoolData() {
       <td class="n">${s.tests.sat ? `${s.tests.sat[0]}–${s.tests.sat[1]}` : '—'}</td>
       <td class="n">${s.tests.act ? `${s.tests.act[0]}–${s.tests.act[1]}` : '—'}</td>
       <td>${esc(POLICY_LABEL[s.tests.policy])}</td>
+      <td class="n">${s.admit.yield ? `${Math.round(s.admit.yield * 100)}%` : '—'}</td>
+      <td>#${POOLS[s.id].rank} · ${esc(poolLabel(POOLS[s.id].rank))}</td>
       <td>${esc(LEGACY_LABEL[s.legacy])}</td>
       <td>${esc(interestLabel(s))}</td>
     </tr>`;
@@ -671,7 +677,14 @@ function renderMethod() {
     <h3>3. Calibrated to real admit rates</h3>
     <p>For each school the model assumes applicants' weighted ratings follow a bell curve, then solves for the logistic curve (slope ${MODEL.beta} log-odds per standard deviation) whose average across that pool equals the school's regular-decision admit rate after removing hooked applicants. In the Harvard trial data, recruited athletes, legacies, dean's-interest applicants and children of faculty were about 5% of applicants but 30% of admits, so the unhooked rate is set at ${Math.round(MODEL.hookShare.strong * 100)}–${Math.round(MODEL.hookShare.none * 100)}% of the published rate depending on how much the school weighs legacy. A ceiling keeps even a perfect file below roughly 40–60% at the most selective schools, because readers turn away many applicants with top marks in every category.</p>
 
-    <h3>4. Odds adjustments</h3>
+    <h3>4. Who else is applying</h3>
+    <p>The same file reads differently in a stronger applicant pool. No school publishes its applicants' credentials, so each pool's strength is estimated from three published signals, each standardized across the 22 schools: the enrolled SAT midpoint (40%; test-optional schools discounted 10 points because only higher scorers report), selectivity (35%), and yield (25%; where admitted students choose to enroll, a sign the strongest applicants apply there). A stronger pool raises what counts as a "typical applicant" by up to ${MODEL.pool.cap} rating points for everything except test scores, which are already compared with each school's own range. It appears as "Stronger applicant pool" in each school's breakdown.</p>
+    <div class="tbl"><table><thead><tr><th>Rank</th><th>School</th><th>Pool</th><th>Shift</th></tr></thead><tbody>
+      ${Object.entries(POOLS).sort((a, b) => a[1].rank - b[1].rank).map(([id, p]) => `<tr><td>${p.rank}</td><td>${esc(SCHOOLS.find((x) => x.id === id).short)}</td><td>${esc(poolLabel(p.rank))}</td><td class="num">${p.strength >= 0 ? '+' : ''}${p.strength.toFixed(2)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="micro">Early Decision inflates yield at schools that fill much of their class early, and the UCs report no SAT data, so their pool estimates rest on selectivity alone.</p>
+
+    <h3>5. Odds adjustments</h3>
     <div class="tbl"><table>
       <thead><tr><th>Factor</th><th>Effect on the odds</th><th>Basis</th></tr></thead>
       <tbody>
