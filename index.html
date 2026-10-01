@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Top 20 Admit Odds</title>
+<meta name="description" content="Estimate your chance of admission at each of the U.S. News 2027 top 20 national universities from your grades, coursework, tests, activities, essays, recommendations and background.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<!-- app:start -->
+<div class="page">
+  <header class="masthead">
+    <div class="masthead-text">
+      <p class="eyebrow">U.S. News 2027 · Best National Universities · Top 20</p>
+      <h1>Top 20 Admit Odds</h1>
+      <p class="lede">Build your application file the way a reader sees it, then get an estimated chance at each of the 22 universities ranked in the top 20, calibrated to Class of 2030 admit rates.</p>
+    </div>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#calculator" class="tab" data-view="calculator">Calculator</a>
+      <a href="#schools" class="tab" data-view="schools">School data</a>
+      <a href="#method" class="tab" data-view="method">How it works</a>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-calculator" class="view" data-view="calculator">
+      <div class="layout">
+        <form id="profile-form" class="file" autocomplete="off" novalidate>
+          <div class="file-bar">
+            <p id="example-flag" class="example-flag" hidden>Showing an example applicant. Replace the details with your own.</p>
+            <div class="file-actions">
+              <button type="button" class="btn ghost" id="load-example">Load example</button>
+              <button type="button" class="btn ghost" id="clear-form">Start blank</button>
+              <a class="btn ghost jump" href="#results-panel">Jump to chances</a>
+            </div>
+          </div>
+
+          <fieldset class="section" id="sec-academics">
+            <legend><span class="sec-num">1</span> Grades &amp; coursework</legend>
+            <p class="hint">Readers judge grades against the rigor of your schedule. Use your unweighted GPA.</p>
+            <div class="grid">
+              <div class="field">
+                <label for="gpaScale">GPA scale</label>
+                <select id="gpaScale" name="gpaScale">
+                  <option value="4">4.0 unweighted</option>
+                  <option value="100">100-point average</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="gpa">GPA</label>
+                <input id="gpa" name="gpa" type="number" step="0.01" min="0" max="100" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="rankPct">Class rank (top %)</label>
+                <input id="rankPct" name="rankPct" type="number" step="0.5" min="0" max="100" inputmode="decimal" placeholder="e.g. 5; blank if unranked">
+              </div>
+              <div class="field">
+                <label for="ucGpa">UC capped weighted GPA <span class="opt">optional</span></label>
+                <input id="ucGpa" name="ucGpa" type="number" step="0.01" min="0" max="4.6" inputmode="decimal" placeholder="Estimated if blank">
+              </div>
+              <div class="field span-2">
+                <label for="rigor">Counselor's rigor rating</label>
+                <select id="rigor" name="rigor">
+                  <option value="most">Most demanding schedule available</option>
+                  <option value="very">Very demanding</option>
+                  <option value="demanding">Demanding</option>
+                  <option value="average">Average</option>
+                  <option value="below">Below average</option>
+                </select>
+                <p class="micro">Your counselor checks one of these boxes on the school report, comparing your courses with what your school offers.</p>
+              </div>
+              <div class="field">
+                <label for="collegeCourses">AP / IB HL / dual-enrollment courses</label>
+                <input id="collegeCourses" name="collegeCourses" type="number" min="0" max="30" step="1" inputmode="numeric">
+              </div>
+              <div class="field">
+                <label for="apAvg">Average AP exam score <span class="opt">optional</span></label>
+                <input id="apAvg" name="apAvg" type="number" min="1" max="5" step="0.1" inputmode="decimal">
+              </div>
+              <div class="field">
+                <label for="trend">Grade trend</label>
+                <select id="trend" name="trend">
+                  <option value="steady">Steady</option>
+                  <option value="up">Rising</option>
+                  <option value="down">Declining</option>
+                </select>
+              </div>
+              <div class="field checks span-2">
+                <label class="check"><input type="checkbox" id="limitedOfferings" name="limitedOfferings"> My school offers few or no AP/IB courses</label>
+                <label class="check"><input type="checkbox" id="beyondCurriculum" name="beyondCurriculum"> I took courses beyond my school's highest level (e.g. college math)</label>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="section" id="sec-tests">
+            <legend><span class="sec-num">2</span> Test scores</legend>
+            <p class="hint">For 2026–27, ten of these schools require the SAT or ACT, Yale is test-flexible, nine are test-optional and the two UCs are test-blind. Scores are compared with each school's middle-50% range.</p>
+            <div class="grid">
+              <div class="field">
+                <label for="testType">Test</label>
+                <select id="testType" name="testType">
+                  <option value="sat">SAT</option>
+                  <option value="act">ACT</option>
+                  <option value="none">No score</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="testScore">Best score (superscore)</label>
+                <input id="testScore" name="testScore" type="number" min="1" max="1600" step="10" inputmode="numeric">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="section" id="sec-activities">
+            <legend><span class="sec-num">3</span> Activities list</legend>
+            <p class="hint">The Common App holds 10 activities. List them in order of importance and rate each honestly: most applicants have one or two tier 3 roles and several tier 4 ones.</p>
+            <div id="activities-list" class="rows"></div>
+            <button type="button" class="btn add" id="add-activity">Add activity</button>
+          </fieldset>
+
+          <fieldset class="section" id="sec-honors">
+            <legend><span class="sec-num">4</span> Honors &amp; awards</legend>
+            <p class="hint">Up to five, at the highest level each one reached.</p>
+            <div id="honors-list" class="rows"></div>
+            <button type="button" class="btn add" id="add-honor">Add honor</button>
+          </fieldset>
+
+          <fieldset class="section" id="sec-resume">
+            <legend><span class="sec-num">5</span> Resume: research, work &amp; programs</legend>
+            <p class="hint">What a resume adds beyond your activities list. Don't count the same thing twice.</p>
+            <div class="grid">
+              <div class="field">
+                <label for="research">Research</label>
+                <select id="research" name="research">
+                  <option value="none">None</option>
+                  <option value="project">Independent or class project</option>
+                  <option value="mentored">Mentored research (university lab, professor)</option>
+                  <option value="presented">Presented, published, or regional science-fair award</option>
+                  <option value="national">National level (ISEF finalist, Regeneron STS, peer-reviewed paper)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="program">Summer program</label>
+                <select id="program" name="program">
+                  <option value="none">None</option>
+                  <option value="open">Open enrollment or pay-to-attend</option>
+                  <option value="selective">Selective (roughly 10–30% admitted)</option>
+                  <option value="elite">Highly selective and free (RSI, TASP, SSP, PROMYS, Ross)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="workHours">Paid work or family duties, hours per week</label>
+                <select id="workHours" name="workHours">
+                  <option value="0">None</option>
+                  <option value="1">1–5</option>
+                  <option value="6">6–14</option>
+                  <option value="15">15 or more</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="internship">Internship</label>
+                <select id="internship" name="internship">
+                  <option value="none">None</option>
+                  <option value="short">Short or shadowing</option>
+                  <option value="substantial">Substantial, with real deliverables</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="venture">Something you started</label>
+                <select id="venture" name="venture">
+                  <option value="none">None</option>
+                  <option value="started">Business, nonprofit, app or publication</option>
+                  <option value="traction">With real traction (revenue, users, press, funds raised)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="portfolio">Portfolio or arts supplement</label>
+                <select id="portfolio" name="portfolio">
+                  <option value="none">None</option>
+                  <option value="submitted">Submitted</option>
+                  <option value="distinguished">Nationally recognized work</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="section" id="sec-essays">
+            <legend><span class="sec-num">6</span> Essays</legend>
+            <p class="hint">Rate your writing as a stranger would. 3 means clear and competent but not memorable, which describes most essays these schools read.</p>
+            <div class="sliders" id="essay-sliders"></div>
+            <details class="essay-check">
+              <summary>Paste your personal statement for a quick check</summary>
+              <p class="micro">Checked in your browser only; nothing is sent anywhere. This flags common problems but doesn't change your score.</p>
+              <label for="essayText" class="visually-hidden">Personal statement</label>
+              <textarea id="essayText" rows="8" placeholder="Paste your essay here"></textarea>
+              <ul id="essay-notes" class="essay-notes"></ul>
+            </details>
+          </fieldset>
+
+          <fieldset class="section" id="sec-recs">
+            <legend><span class="sec-num">7</span> Recommendations &amp; interview</legend>
+            <p class="hint">Teachers rate you against every student they have taught. Choose what you expect them to check; pick "Not sure" if you don't know.</p>
+            <div class="grid">
+              <div class="field">
+                <label for="teacher1">Teacher 1</label>
+                <select id="teacher1" name="teacher1" data-group="recs"></select>
+              </div>
+              <div class="field">
+                <label for="teacher2">Teacher 2</label>
+                <select id="teacher2" name="teacher2" data-group="recs"></select>
+              </div>
+              <div class="field">
+                <label for="counselor">Counselor</label>
+                <select id="counselor" name="counselor" data-group="recs"></select>
+              </div>
+              <div class="field">
+                <label for="interview">Alumni interview</label>
+                <select id="interview" name="interview"></select>
+              </div>
+              <div class="field span-2">
+                <label for="interest">Contact with the schools</label>
+                <select id="interest" name="interest">
+                  <option value="some">Some (info sessions, opened emails)</option>
+                  <option value="high">A lot (campus visit, interview, specific why-us essays)</option>
+                  <option value="none">None</option>
+                </select>
+                <p class="micro">Only matters where the Common Data Set lists demonstrated interest as considered: Duke, Dartmouth, Northwestern, Rice and WashU.</p>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="section" id="sec-context">
+            <legend><span class="sec-num">8</span> Background, major &amp; ties</legend>
+            <div class="grid">
+              <div class="field">
+                <label for="residency">Residency</label>
+                <select id="residency" name="residency">
+                  <option value="us">U.S., outside California</option>
+                  <option value="ca">California resident</option>
+                  <option value="intl">International</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="major">Intended major</label>
+                <select id="major" name="major"></select>
+              </div>
+              <div class="field checks span-2">
+                <label class="check"><input type="checkbox" id="firstGen" name="firstGen"> First in my family to attend a four-year college</label>
+                <label class="check"><input type="checkbox" id="lowIncome" name="lowIncome"> Low-income household (Pell-eligible range)</label>
+                <label class="check"><input type="checkbox" id="rural" name="rural"> Rural area or underrepresented state</label>
+                <label class="check"><input type="checkbox" id="hardship" name="hardship"> Significant hardship or responsibilities I explain in my application</label>
+              </div>
+            </div>
+            <h3 class="sub">Ties to specific schools</h3>
+            <p class="hint">Legacy means a parent graduated from that college. Recruited means a coach has put you on their support list.</p>
+            <div class="ties-wrap">
+              <table class="ties" id="ties-table">
+                <thead><tr><th scope="col">School</th><th scope="col">Legacy</th><th scope="col">Recruited athlete</th><th scope="col">Donor ties</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="field early-field">
+              <label for="earlyChoice">Where would you apply early?</label>
+              <select id="earlyChoice" name="earlyChoice"></select>
+              <p class="micro">You can usually make only one binding Early Decision or restrictive early application. Chances for both rounds appear for every school either way.</p>
+            </div>
+          </fieldset>
+        </form>
+
+        <aside class="panel" id="results-panel">
+          <div class="reader-card summary" id="summary"></div>
+          <div class="results-head">
+            <h2>Your chances</h2>
+            <div class="sort" role="group" aria-label="Sort schools">
+              <button type="button" class="seg" data-sort="chance" aria-pressed="true">By chance</button>
+              <button type="button" class="seg" data-sort="rank" aria-pressed="false">By rank</button>
+            </div>
+          </div>
+          <p class="legend-line"><span class="key rd"></span> Regular decision <span class="key ea"></span> Early round <span class="muted">· bars show the likely range</span></p>
+          <ol class="school-list" id="school-list" aria-live="polite"></ol>
+          <div class="strategy" id="strategy"></div>
+          <div class="reader-card" id="reader-card"></div>
+          <p class="disclaimer">Estimates from published admissions data, not predictions. Every school here admits fewer than 13% of applicants, so treat all of them as reaches and build a balanced list.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section id="view-schools" class="view" data-view="schools" hidden>
+      <div class="prose-head">
+        <h2>How hard is each school to get into?</h2>
+        <p id="schools-intro" class="lede-sm"></p>
+      </div>
+      <div class="table-wrap">
+        <table class="data" id="schools-table"></table>
+      </div>
+      <div id="school-cards" class="cards"></div>
+    </section>
+
+    <section id="view-method" class="view" data-view="method" hidden>
+      <div class="prose" id="method-body"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <p>Rankings: U.S. News &amp; World Report 2027 Best National Universities (September 2026). Admissions data: Common Data Sets 2025–26 and Class of 2030 reports, current as of October 2026. Not affiliated with any university or with U.S. News.</p>
+  </footer>
+</div>
+<!-- app:end -->
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
