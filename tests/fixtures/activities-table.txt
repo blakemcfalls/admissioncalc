@@ -1,0 +1,83 @@
+Activities List — Sample Student
+
+Activities
+
+#
+
+Type
+
+Position / leadership role
+
+Organization
+
+Description
+
+Grades
+
+Chars (role / org / desc)
+
+1
+
+Research
+
+Researcher
+
+State University Chemistry Lab
+
+Worked w/ Prof. Diaz on battery electrolytes; co-authored a paper now under review at a materials journal
+
+11–12
+
+10 / 30 / 104
+
+2
+
+Computer or technology
+
+Founder & CEO
+
+TutorLink, App Matching Tutors With Rural Students
+
+Launched app w/ 300+ users in 4 states; built the backend; earns $1.2k/year in revenue
+
+10–12
+
+13 / 49 / 86
+
+3
+
+Athletics: JV/Varsity
+
+Captain (12)
+
+Varsity Swim Team
+
+Lead 40-member team; state qualifier in the 200 IM
+
+9–12
+
+12 / 17 / 52
+
+4
+
+Other
+
+Member
+
+Chess Club
+
+Play weekly matches
+
+9
+
+6 / 10 / 19
+
+Honors
+
+National Merit Semifinalist
+
+Texas All-State Choir
+
+Counselor notes
+
+Ask about hours

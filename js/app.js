@@ -213,6 +213,10 @@ function activityRow(a, i) {
           <label for="act-name-${i}">Activity</label>
           <input type="text" id="act-name-${i}" data-list="activities" data-index="${i}" data-key="name" value="${esc(a.name)}" placeholder="Position and organization" maxlength="150">
         </div>
+        <div class="field wide">
+          <label for="act-desc-${i}">Description <span class="opt">optional, 150 characters</span></label>
+          <input type="text" id="act-desc-${i}" data-list="activities" data-index="${i}" data-key="description" value="${esc(a.description || '')}" placeholder="What you did and the results" maxlength="150">
+        </div>
         <div class="field">
           <label for="act-cat-${i}">Category</label>
           <select id="act-cat-${i}" data-list="activities" data-index="${i}" data-key="category">${cats}</select>
@@ -226,7 +230,7 @@ function activityRow(a, i) {
           <input type="number" id="act-years-${i}" data-list="activities" data-index="${i}" data-key="years" min="1" max="4" step="1" value="${esc(a.years)}">
         </div>
         <div class="field">
-          <label for="act-hours-${i}">Hours per week</label>
+          <label for="act-hours-${i}">Hours per week${a.hoursEstimated ? ' <span class="opt est-flag">estimated</span>' : ''}</label>
           <input type="number" id="act-hours-${i}" data-list="activities" data-index="${i}" data-key="hours" min="0" max="60" step="1" value="${esc(a.hours)}">
         </div>
       </div>
@@ -309,7 +313,10 @@ function readForm(e) {
   if (t?.dataset.list) {
     const list = state[t.dataset.list];
     const item = list[Number(t.dataset.index)];
-    if (item) item[t.dataset.key] = t.type === 'number' || t.dataset.key === 'tier' ? numOrBlank(t.value) : t.value;
+    if (item) {
+      item[t.dataset.key] = t.type === 'number' || t.dataset.key === 'tier' ? numOrBlank(t.value) : t.value;
+      if (t.dataset.key === 'hours') item.hoursEstimated = false;
+    }
   } else if (t?.dataset.essay) {
     state.essay[t.dataset.essay] = Number(t.value);
   } else if (t?.dataset.tie) {
@@ -941,10 +948,18 @@ async function importFiles(files, kind) {
     try {
       const { data, via, warning } = await readFileForImport(file, kind);
       const parts = [];
+      const warnings = warning ? [warning] : [];
       if (kind !== 'honors' && kind !== 'essay' && data.activities.length) {
-        const before = state.activities.filter((a) => String(a.name || '').trim()).length;
-        state.activities = mergeList(state.activities, data.activities, MAX_ACTIVITIES);
-        parts.push(`${state.activities.length - before} activities`);
+        if (data.fromTable) {
+          // A full activities table is the list itself: use it in its own order.
+          state.activities = data.activities.slice(0, MAX_ACTIVITIES);
+          parts.push(`all ${state.activities.length} activities in your order`);
+        } else {
+          const before = state.activities.filter((a) => String(a.name || '').trim()).length;
+          state.activities = mergeList(state.activities, data.activities, MAX_ACTIVITIES);
+          parts.push(`${state.activities.length - before} activities`);
+        }
+        if (data.activities.some((a) => a.hoursEstimated)) warnings.push('Hours per week weren\'t in the file, so they are estimated; fill them in below.');
       }
       if (kind !== 'activities' && kind !== 'essay' && data.honors.length) {
         const before = state.honors.length;
@@ -967,7 +982,7 @@ async function importFiles(files, kind) {
       changed = changed || parts.length > 0;
       li.className = parts.length ? 'good' : 'warn';
       li.textContent = parts.length
-        ? `${file.name}: added ${parts.join(', ')}${via === 'claude' ? ' (read by Claude)' : ''}.${warning ? ` ${warning}` : ''}`
+        ? `${file.name}: added ${parts.join(', ')}${via === 'claude' ? ' (read by Claude)' : ''}.${warnings.length ? ` ${warnings.join(' ')}` : ''}`
         : `${file.name}: nothing new found. Check that it's a resume, list or essay.`;
     } catch (e) {
       li.className = 'bad';

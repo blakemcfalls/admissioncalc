@@ -114,3 +114,31 @@ test('graded supplements change only that school', () => {
   assert.equal(duke(b), duke(a));
   assert.equal(supplementDims([{ grade: null }]), null);
 });
+
+test('reads a Word-table activities list (one cell per line) in its own order', () => {
+  const text = readFileSync(new URL('./fixtures/activities-table.txt', import.meta.url), 'utf8');
+  const r = parseProfileText(text);
+  assert.equal(r.fromTable, true);
+  assert.deepEqual(r.activities.map((a) => a.name), [
+    'Researcher, State University Chemistry Lab',
+    'Founder & CEO, TutorLink, App Matching Tutors With Rural Students',
+    'Captain (12), Varsity Swim Team',
+    'Member, Chess Club',
+  ]);
+  assert.deepEqual(r.activities.map((a) => a.category), ['Research', 'Computer/Technology', 'Athletics: JV/Varsity', 'Other Club/Activity']);
+  assert.deepEqual(r.activities.map((a) => a.years), [2, 3, 4, 1]);
+  assert.deepEqual(r.activities.map((a) => a.tier), [3, 2, 2, 4]);
+  assert.ok(r.activities.every((a) => a.hoursEstimated));
+  assert.match(r.activities[0].description, /Prof\. Diaz/);
+  assert.deepEqual(r.honors.map((h) => h.level), ['national', 'state'], 'notes after the honors are not honors');
+});
+
+test('reads a tab-separated activities list with hours', () => {
+  const tsv = 'Type\tPosition\tOrganization\tDescription\tGrades\tHours per week\nDebate or speech\tCaptain\tDebate Team\tState finalist in Lincoln-Douglas\t9-12\t8\nResearch\tIntern\tCity Hospital\tShadowed doctors\t11\t3';
+  const r = parseProfileText(tsv);
+  assert.equal(r.activities.length, 2);
+  assert.equal(r.activities[0].hours, 8);
+  assert.equal(r.activities[0].years, 4);
+  assert.equal(r.activities[0].category, 'Debate/Speech');
+  assert.equal(r.activities[0].hoursEstimated, false);
+});

@@ -64,6 +64,10 @@ npm test             # model unit tests (node:test, Node 18+)
 - Files are read in the browser. PDFs use [pdf.js](https://mozilla.github.io/pdf.js/) and Word files
   use [mammoth](https://github.com/mwilliamson/mammoth.js), both loaded from jsDelivr only when
   you upload that type of file.
+- Activities lists laid out as a table (one row per activity with columns such as #, Type,
+  Position, Organization, Description, Grades, Hours) are read row by row, from Word tables or
+  tab/comma-separated text. The whole list replaces the current one in the file's order; types map
+  to Common App categories, grade spans to years, and missing hours are estimated and flagged.
 - Without Claude, a pattern-based parser ([`js/importer.js`](js/importer.js)) finds resume
   sections and infers each activity's tier, category, years and hours, each honor's level, and the
   research / summer program / work / internship / venture fields. A pattern-based grader

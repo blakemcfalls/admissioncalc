@@ -594,3 +594,4 @@ table.data a:hover { color: var(--ivy); text-decoration: underline; }
 .supp .limit { display: flex; gap: 6px; align-items: center; font-size: 0.78rem; color: var(--muted); }
 .supp .limit input { width: 5.5rem; padding: 4px 8px; }
 .supp textarea { font-size: var(--step--1); }
+.est-flag { color: var(--warn); }

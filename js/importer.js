@@ -118,6 +118,7 @@ const SECTIONS = [
 
 function headingKind(line) {
   const clean = line.replace(/[:\-–—|]+$/, '').trim();
+  if (clean.length <= 40 && /\b(notes|comments|feedback|to-?do|edits|revisions)$/i.test(clean)) return 'skip';
   if (!clean || clean.length > 45 || /[.,;]$/.test(line.trim())) return null;
   if (BULLET.test(line)) return null;
   const words = clean.split(/\s+/).length;
@@ -204,12 +205,42 @@ const TIER2 = /\b(state|regional|all-state|all-region|all-county|district|county
 const LEADER = /\b(president|vice[- ]president|captain|co-?captain|founder|co-?founder|lead(er)?|head|editor|officer|chair(person)?|treasurer|secretary|director|manager|section leader|organizer|coordinator|concertmaster|principal|drum major|student body)\b/i;
 const FOUNDED = /\b(founded|founder|co-?founded|started|launched|created)\b/i;
 
+const TOP_ROLE = /\b(founder|co-?founder|ceo|president|captain|co-?captain|editor[- ]in[- ]chief|executive director)\b/i;
+const IMPACT_UNITS = 'students?|members?|users?|subscribers?|followers?|customers?|people|kids|children|delegates?|volunteers?|coaches|attendees?|readers?|views?|impressions?|listeners?|downloads?|participants?|families|patients?|clients?|athletes?|campers?|viewers?|signatures?';
+const PEOPLE = new RegExp(`(\\d[\\d,.]*)\\s*(k|m)?\\s*\\+?[\\s-]*(?:[a-z]+[\\s-]+)?(?:${IMPACT_UNITS})\\b`, 'gi');
+
+// Largest audience or membership figure mentioned ("120+ users", "15k+ monthly impressions").
+export function largestReach(text) {
+  let max = 0;
+  for (const m of text.matchAll(PEOPLE)) {
+    let n = Number(m[1].replace(/,/g, ''));
+    if (!Number.isFinite(n)) continue;
+    if (/k/i.test(m[2] || '')) n *= 1000;
+    if (/m/i.test(m[2] || '')) n *= 1000000;
+    max = Math.max(max, n);
+  }
+  return max;
+}
+
+// Tier 1 national/international distinction … tier 4 participation, scored
+// from the role, recognition, and measurable reach the entry describes.
+// A national or international result, not just the word "national" somewhere.
+const TIER1_RESULT = /\b(national|international|world|nationals|u\.s\.|usa)\b[^.;]{0,30}\b(winner|won|champion(ship)?s?|finalist|medal(ist)?|qualifier|1st|first place|top \d+|placed|ranked)\b|\b(winner|won|champion|finalist|medal(ist)?|qualifier|1st|first place|top \d+|placed|ranked)\b[^.;]{0,30}\b(national|international|world|nationals|u\.s\.|usa)\b|\b(usa(mo|jmo|pho|bo|ncho)|olympiad team|isef|regeneron sts|presidential scholar)\b/i;
+
 export function inferTier(text) {
-  if (TIER1.test(text) && PLACED.test(text)) return 1;
-  if (TIER2.test(text) && (PLACED.test(text) || LEADER.test(text))) return 2;
-  if (FOUNDED.test(text) && /\b(\d{2,}|\$)/.test(text) && LEADER.test(text)) return 2;
-  if (LEADER.test(text) || FOUNDED.test(text)) return 3;
-  return 4;
+  if (TIER1_RESULT.test(text)) return 1;
+  let score = 0;
+  if (TOP_ROLE.test(text)) score += 2.5;
+  else if (LEADER.test(text) || FOUNDED.test(text)) score += 2;
+  if (TIER2.test(text) && (PLACED.test(text) || LEADER.test(text))) score += 2.5;
+  const reach = largestReach(text);
+  score += reach >= 1000 ? 2 : reach >= 100 ? 1.5 : reach >= 30 ? 0.75 : 0;
+  if (/\$\s?\d|\brevenue\b|\braised\b|\bfunds?\b/i.test(text)) score += 1;
+  if (/\b([1-9]\d+)\s+(states|countries)\b|\bnationwide\b|\bnational(ly)?\b|\binternational(ly)?\b/i.test(text)) score += 1;
+  if (/\b(published|publication|journal|under review|peer[- ]review(ed)?|authored)\b/i.test(text)) score += 1.5;
+  if (/\b(prof\.?|professor|university|phd)\b/i.test(text)) score += 0.5;
+  if (/\b(increased|grew|built|launched|created|developed|organized|raised)\b/i.test(text)) score += 0.5;
+  return score >= 6 ? 1 : score >= 3.5 ? 2 : score >= 1.5 ? 3 : 4;
 }
 
 const CATEGORY_RULES = [
@@ -258,12 +289,16 @@ function cleanName(title) {
     .slice(0, 150);
 }
 
+const US_STATES = 'Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming';
+
 export const HONOR_RULES = [
   ['intl', /\b(international|world|global|imo|ipho|iol|ioi|icho|ibo)\b/i],
   ['school', /\bap scholar\b|honor roll|principal'?s list|dean'?s list/i],
   ['regional', /national merit commended|commended student/i],
   ['national', /\b(national|usa(mo|jmo|pho|bo|ncho)?|aime|regeneron|isef|presidential scholar|coca-cola|scholastic (art|writing).*(gold|silver|national)|national merit (semi-?)?finalist|nmsf|questbridge)\b/i],
+  ['national', /\b(\d(\.\d)?|10)% (acceptance|admit)|university of [a-z ]+ model (un|united nations)|(harvard|yale|princeton|georgetown|berkeley) model (un|united nations)|national circuit/i],
   ['state', /\b(state|all-state|governor'?s?)\b/i],
+  ['state', new RegExp(`\\b(${US_STATES})\\b`, 'i')],
   ['regional', /\b(regional|district|county|area|city|section(al)?|all-region|metro)\b/i],
 ];
 
@@ -328,7 +363,181 @@ export function inferResume(text, sections = splitSections(text)) {
 }
 
 // Main entry: text of a resume, activities list or honors list -> fields.
+// ------------------------------------------------------------ activity tables
+// Activities lists are often tables: one row per activity with columns such
+// as #, Type, Position, Organization, Description, Grades, Hours, Weeks. Word
+// tables come through as one cell per line; spreadsheets as tab- or
+// comma-separated rows. Both are handled here.
+
+function columnKind(cell) {
+  const c = cell.trim().toLowerCase();
+  if (/^char|character|count|timing|^when\b|^notes?$/.test(c)) return 'ignore';
+  if (/^(#|no\.?|number|rank|order)$/.test(c)) return 'index';
+  if (/^(activity )?type$|^category$|^activity type/.test(c)) return 'type';
+  if (/position|role|leadership/.test(c)) return 'position';
+  if (/^organi[sz]ation|^org\b|organi[sz]ation name/.test(c)) return 'org';
+  if (/description|details|what (you|i) did/.test(c)) return 'desc';
+  if (/^(participation )?grades?( levels?)?$|^grade levels?|^years?$/.test(c)) return 'grades';
+  if (/hours|hrs/.test(c)) return 'hours';
+  if (/weeks/.test(c)) return 'weeks';
+  if (/^(activity|activity name|name)$/.test(c)) return 'name';
+  return null;
+}
+
+const isTableHeader = (kinds) =>
+  kinds.filter((k) => ['position', 'org', 'desc', 'type', 'name'].includes(k)).length >= 2 &&
+  kinds.filter(Boolean).length >= 3;
+
+const GRADE_CELL = /^(?:grades?\s*)?(9|10|11|12)(?:\s*(?:–|-|—|to|,|&|and)\s*(9|10|11|12))*\.?$/i;
+
+export function parseGrades(cell) {
+  const nums = (String(cell).match(/\b(9|10|11|12)\b/g) || []).map(Number);
+  if (!nums.length) return null;
+  if (/–|-|—|to/.test(cell) && nums.length === 2) return Math.min(4, nums[1] - nums[0] + 1);
+  return Math.min(4, new Set(nums).size);
+}
+
+// Returns { rows: [{type, position, org, desc, grades, hours, ...}], lines: [start, end] } or null.
+export function findActivityTable(text) {
+  const lines = text.split('\n').map((l) => l.trim());
+  const nonEmpty = lines.map((l, i) => [l, i]).filter(([l]) => l);
+
+  // Delimited rows (tab, pipe or comma): header row then data rows.
+  for (const [line, i] of nonEmpty) {
+    const delim = line.includes('\t') ? '\t' : line.includes('|') ? '|' : line.split(',').length >= 3 ? ',' : null;
+    if (!delim) continue;
+    const kinds = splitRow(line, delim).map(columnKind);
+    if (!isTableHeader(kinds)) continue;
+    const rows = [];
+    let end = i;
+    for (const [next, j] of nonEmpty.filter(([, j]) => j > i)) {
+      const cells = splitRow(next, delim);
+      if (cells.length < Math.min(3, kinds.length)) break;
+      rows.push(rowFromCells(cells, kinds));
+      end = j;
+    }
+    if (rows.length) return { rows, lines: [i, end] };
+  }
+
+  // One cell per line (Word tables): a run of header cells, then records.
+  for (let a = 0; a < nonEmpty.length; a++) {
+    const kinds = [];
+    let b = a;
+    while (b < nonEmpty.length && columnKind(nonEmpty[b][0])) kinds.push(columnKind(nonEmpty[b++][0]));
+    if (!isTableHeader(kinds)) continue;
+    const n = kinds.length;
+    const rows = [];
+    let pos = b;
+    let expected = 1;
+    const hasIndex = kinds[0] === 'index';
+    while (pos < nonEmpty.length) {
+      if (hasIndex && nonEmpty[pos][0] !== String(expected)) break;
+      if (headingKind(nonEmpty[pos][0])) break;
+      const cells = nonEmpty.slice(pos, pos + n).map(([l]) => l);
+      if (cells.length < n - 1) break;
+      // A shorter record (an empty cell was dropped) ends where the next index starts.
+      const nextIdx = hasIndex ? cells.indexOf(String(expected + 1), 1) : -1;
+      const record = nextIdx > 0 ? cells.slice(0, nextIdx) : cells;
+      rows.push(rowFromCells(record, kinds));
+      pos += record.length;
+      expected++;
+    }
+    if (rows.length) return { rows, lines: [nonEmpty[a][1], nonEmpty[Math.max(a, pos - 1)][1]] };
+  }
+  return null;
+}
+
+function splitRow(line, delim) {
+  if (delim !== ',') return line.split(delim).map((c) => c.trim()).filter((c, i, arr) => !(delim === '|' && (i === 0 || i === arr.length - 1) && !c));
+  const out = [];
+  let cur = '';
+  let quoted = false;
+  for (const ch of line) {
+    if (ch === '"') quoted = !quoted;
+    else if (ch === ',' && !quoted) {
+      out.push(cur.trim());
+      cur = '';
+    } else cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function rowFromCells(cells, kinds) {
+  const row = {};
+  if (cells.length === kinds.length) {
+    kinds.forEach((k, i) => {
+      if (k && k !== 'ignore') row[k] = cells[i];
+    });
+    return row;
+  }
+  // Cells and columns don't line up: place grade and number cells by pattern,
+  // text cells in column order.
+  const textKinds = kinds.filter((k) => ['type', 'position', 'org', 'desc', 'name'].includes(k));
+  let t = 0;
+  for (const [i, cell] of cells.entries()) {
+    if (i === 0 && kinds[0] === 'index') {
+      row.index = cell;
+    } else if (GRADE_CELL.test(cell) && kinds.includes('grades') && !row.grades) {
+      row.grades = cell;
+    } else if (/^\d+(\.\d+)?$/.test(cell) && kinds.includes('hours') && !row.hours) {
+      row.hours = cell;
+    } else if (/^\d+\s*\/\s*\d+/.test(cell)) {
+      // character counts
+    } else if (t < textKinds.length) {
+      row[textKinds[t++]] = cell;
+    }
+  }
+  return row;
+}
+
+export function matchCategory(type) {
+  if (!type) return null;
+  const norm = (x) => x.toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+  const t = norm(type);
+  if (!t) return null;
+  const exact = ACTIVITY_CATEGORIES.find((c) => norm(c) === t);
+  if (exact) return exact;
+  if (/^other/.test(t)) return 'Other Club/Activity';
+  if (/athletics/.test(t)) return /club/.test(t) ? 'Athletics: Club' : 'Athletics: JV/Varsity';
+  if (/^music/.test(t)) return /vocal/.test(t) ? 'Music: Vocal' : 'Music: Instrumental';
+  const first = t.split(' ')[0];
+  return ACTIVITY_CATEGORIES.find((c) => norm(c).split(' ')[0] === first) ?? null;
+}
+
+export function activitiesFromTable(rows) {
+  return rows
+    .map((r) => {
+      const position = (r.position || '').trim();
+      const org = (r.org || '').trim();
+      const name = (r.name || [position, org].filter(Boolean).join(', ')).slice(0, 150);
+      if (!name) return null;
+      const all = [r.type, position, org, r.desc].filter(Boolean).join(' · ');
+      const hours = Number(String(r.hours || '').match(/\d+(\.\d+)?/)?.[0]);
+      const tier = inferTier(all);
+      return {
+        name,
+        category: matchCategory(r.type) ?? inferCategory(all),
+        tier,
+        years: parseGrades(r.grades || '') ?? inferYears(all),
+        hours: Number.isFinite(hours) && hours > 0 ? Math.min(60, Math.round(hours)) : tier <= 2 ? 6 : tier === 3 ? 4 : 2,
+        hoursEstimated: !(Number.isFinite(hours) && hours > 0),
+        description: (r.desc || '').slice(0, 150),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 10);
+}
+
 export function parseProfileText(text, kind = 'auto') {
+  const table = kind === 'honors' ? null : findActivityTable(text);
+  if (table) {
+    // Drop the table's lines so the remaining sections (honors, resume) parse normally.
+    const lines = text.split('\n');
+    const rest = lines.filter((_, i) => i < table.lines[0] || i > table.lines[1]).join('\n');
+    const others = parseProfileText(rest, kind === 'activities' ? 'honors-skip' : kind);
+    return { ...others, activities: activitiesFromTable(table.rows), resume: inferResume(text), fromTable: true };
+  }
   const sections = splitSections(text);
   const anyHeadings = sections.some((s) => s.kind !== 'unknown');
   const activities = [];
@@ -341,6 +550,7 @@ export function parseProfileText(text, kind = 'auto') {
       k = kind === 'honors' ? 'honors' : kind === 'auto' || kind === 'activities' || kind === 'resume' ? 'activities' : k;
     }
     if (k === 'education' || k === 'skip' || k === 'programs') continue;
+    if (kind === 'honors-skip' && k === 'activities') continue;
     for (const e of entries(s.lines)) {
       const full = [e.title, ...e.desc].join(' ');
       if (k === 'honors') {
@@ -387,6 +597,8 @@ export function sanitizeImport(data) {
       tier: [1, 2, 3, 4].includes(Number(a.tier)) ? Number(a.tier) : inferTier(String(a.name)),
       years: Math.min(4, Math.max(1, Math.round(Number(a.years)) || 2)),
       hours: Math.min(60, Math.max(0, Math.round(Number(a.hours)) || 3)),
+      ...(a.hoursEstimated || !(Number(a.hours) > 0) ? { hoursEstimated: true } : {}),
+      ...(a.description ? { description: String(a.description).slice(0, 150) } : {}),
     }));
   const honors = (Array.isArray(data?.honors) ? data.honors : [])
     .filter((h) => h && String(h.name || '').trim())
@@ -402,7 +614,7 @@ export function sanitizeImport(data) {
     portfolio: pick(r.portfolio, ['none', 'submitted', 'distinguished'], 'none'),
   };
   const essays = (Array.isArray(data?.essays) ? data.essays : []).map(String).filter((e) => e.trim().split(/\s+/).length >= 80);
-  return { activities: activities.slice(0, 10), honors: honors.slice(0, 5), resume, essays };
+  return { activities: activities.slice(0, 10), honors: honors.slice(0, 5), resume, essays, fromTable: !!data?.fromTable };
 }
 
 const RANKS = {
@@ -436,7 +648,8 @@ export function mergeList(current, incoming, max) {
 
 export const AI_EXTRACT_PROMPT = (text, kind) => `You are filling in a college admissions calculator from a student's ${kind === 'auto' ? 'document (a resume, activities list, honors list, or essay)' : kind}.
 Read the document below and reply with only a JSON object of this shape:
-{"activities":[{"name":"Position, organization (max 150 chars)","category":"<one of the categories>","tier":1|2|3|4,"years":1-4,"hours":hours per week}],
+{"fromTable": true if the document is a complete ranked activities list (e.g. a table with one row per activity), else false,
+ "activities":[{"name":"Position, organization (max 150 chars)","description":"the activity description, max 150 chars","category":"<one of the categories>","tier":1|2|3|4,"years":1-4,"hours":hours per week or null if not stated}],
  "honors":[{"name":"award name","level":"intl"|"national"|"state"|"regional"|"school"}],
  "resume":{"research":"none"|"project"|"mentored"|"presented"|"national","program":"none"|"open"|"selective"|"elite","workHours":"0"|"1"|"6"|"15","internship":"none"|"short"|"substantial","venture":"none"|"started"|"traction","portfolio":"none"|"submitted"|"distinguished"},
  "essays":["full text of any essay or personal statement found, verbatim"]}
