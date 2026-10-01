@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFile(join(root, p), 'utf8');
 
-const order = ['js/schools.js', 'js/model.js', 'js/essay-check.js', 'js/app.js'];
+const order = ['js/schools.js', 'js/model.js', 'js/essay-check.js', 'js/grader.js', 'js/importer.js', 'js/app.js'];
 const varName = (path) => `__${path.replace(/^js\//, '').replace(/\W/g, '_')}`;
 
 function transform(path, src) {
@@ -22,7 +22,7 @@ function transform(path, src) {
     /^import\s*\{([^}]*)\}\s*from\s*'\.\/([\w-]+\.js)';?/gm,
     (_, names, file) => `const {${names}} = ${varName(`js/${file}`)};`,
   );
-  code = code.replace(/^export\s+(const|let|function|class)\s+([\w$]+)/gm, (_, kind, name) => {
+  code = code.replace(/^export\s+(async\s+function|const|let|function|class)\s+([\w$]+)/gm, (_, kind, name) => {
     exported.push(name);
     return `${kind} ${name}`;
   });

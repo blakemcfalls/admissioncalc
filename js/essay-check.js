@@ -82,7 +82,7 @@ export function checkEssay(raw, { limit = 650 } = {}) {
 
   const notes = [];
   if (words.length > limit) notes.push({ level: 'bad', text: `${words.length} words is over the ${limit}-word limit.` });
-  else if (words.length < 400) notes.push({ level: 'warn', text: `${words.length} words. Strong Common App essays usually use most of the 650 words.` });
+  else if (words.length < (limit >= 500 ? 400 : Math.round(limit * 0.6))) notes.push({ level: 'warn', text: `${words.length} words. Strong essays usually use most of the ${limit}-word limit.` });
   else notes.push({ level: 'good', text: `${words.length} words, within the ${limit}-word limit.` });
 
   if (quoteOpening) notes.push({ level: 'warn', text: 'Opens with a quotation. Readers see this often; starting inside a moment of your own is usually stronger.' });

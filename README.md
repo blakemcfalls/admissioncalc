@@ -10,6 +10,12 @@ recommendations, interview, background and ties to specific schools — and the 
 regular-decision and early-round chance for every school, a likely range, what moved your odds,
 and strategy notes (where applying early helps most, where to apply test-optional).
 
+You can also **upload files instead of typing**: drop a resume, Common App activities list, honors
+list or essay (PDF, Word .docx, RTF or text) and the calculator fills in the activities, honors,
+resume fields and personal statement. Essays are **graded** on a 1–5 rubric, and each school's
+detail panel lets you add that school's **supplemental essays**; graded supplements feed that
+school's estimate.
+
 It also includes a **School data** section summarizing how hard each school is to get into, with
 sources, and a **How it works** section documenting the model.
 
@@ -52,6 +58,23 @@ npm test             # model unit tests (node:test, Node 18+)
 | Interview | Not done / weak / average / strong / exceptional | Only where the school offers interviews |
 | Personal qualities | Derived from essays, recommendations, interview, leadership, service and work | Plus context for significant hardship |
 | Context & hooks | Residency, intended major, first-gen, low-income, rural, demonstrated interest, legacy / recruited athlete / donor ties per school, early-round choice | Odds multipliers grounded in published data (below) |
+
+## File import and essay grading
+
+- Files are read in the browser. PDFs use [pdf.js](https://mozilla.github.io/pdf.js/) and Word files
+  use [mammoth](https://github.com/mwilliamson/mammoth.js), both loaded from jsDelivr only when
+  you upload that type of file.
+- Without Claude, a pattern-based parser ([`js/importer.js`](js/importer.js)) finds resume
+  sections and infers each activity's tier, category, years and hours, each honor's level, and the
+  research / summer program / work / internship / venture fields. A pattern-based grader
+  ([`js/grader.js`](js/grader.js)) scores voice, specificity, insight, craft, school fit (school
+  names, courses, programs; a different school's name scores 1) and how well a supplement uses the
+  prompt's key words. It cannot judge meaning, so it labels itself an automatic estimate.
+- When the page runs as a Claude artifact with the `sample` capability, files (including photos of
+  a page) are read by Claude and essays are graded by Claude on the same rubric, using the viewer's
+  Claude account. Anything Claude returns is clamped to the calculator's allowed values.
+- Grading the personal statement sets the four personal-statement sliders. Graded supplements for a
+  school replace the general "school fit" and "supplements" sliders for that school only.
 
 ## How the estimate works
 
@@ -153,10 +176,12 @@ index.html            page markup
 css/styles.css        styles (light and dark themes)
 js/schools.js         school data, policies, C7 grids and sources
 js/model.js           rating, calibration and odds model (pure, no DOM)
-js/essay-check.js     local personal-statement checker
+js/essay-check.js     essay length, cliché and detail checks
+js/grader.js          essay and supplement grading (pattern-based, plus the Claude prompt)
+js/importer.js        file reading (PDF, Word, RTF, text) and resume/activities parsing
 js/app.js             form, results, school data and method views
 scripts/build.mjs     bundles everything into dist/top20-admit-odds.html
-tests/model.test.js   unit tests
+tests/                unit tests (model, importer, grader) and fixtures
 ```
 
 ## Updating for a new cycle

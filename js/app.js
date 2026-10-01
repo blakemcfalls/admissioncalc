@@ -6,6 +6,10 @@ import {
   scoreAll, profileSummary, readerBand, describeRating, earlyPlanNotes, satEquivalent,
 } from './model.js';
 import { checkEssay } from './essay-check.js';
+import { gradeEssay, aiGradePrompt, normalizeGrade } from './grader.js';
+import {
+  ACCEPT, isImage, fileToText, classifyText, parseProfileText, sanitizeImport, mergeList, mergeResume, AI_EXTRACT_PROMPT,
+} from './importer.js';
 
 const STORAGE_KEY = 'top20-admit-odds:v1';
 const MAX_ACTIVITIES = 10;
@@ -48,6 +52,7 @@ const EXAMPLE = {
   interview: 'strong', interest: 'some',
   residency: 'us', major: 'socsci', firstGen: false, lowIncome: false, rural: false, hardship: false,
   legacy: [], athlete: [], donor: [], earlyChoice: 'penn',
+  essayText: '', essayGrade: null, supplements: {},
 };
 
 const BLANK = {
@@ -63,6 +68,7 @@ const BLANK = {
   interview: 'none', interest: 'some',
   residency: 'us', major: 'undecided', firstGen: false, lowIncome: false, rural: false, hardship: false,
   legacy: [], athlete: [], donor: [], earlyChoice: '',
+  essayText: '', essayGrade: null, supplements: {},
 };
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -78,7 +84,8 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return { ...clone(BLANK), ...parsed, essay: { ...BLANK.essay, ...parsed.essay }, recs: { ...BLANK.recs, ...parsed.recs } };
+    const supplements = parsed.supplements && typeof parsed.supplements === 'object' ? parsed.supplements : {};
+    return { ...clone(BLANK), ...parsed, supplements, essay: { ...BLANK.essay, ...parsed.essay }, recs: { ...BLANK.recs, ...parsed.recs } };
   } catch {
     return null;
   }
@@ -275,6 +282,7 @@ function writeForm() {
   $$('[data-tie]').forEach((el) => {
     el.checked = (state[el.dataset.tie] || []).includes(el.value);
   });
+  $('#essayText').value = state.essayText || '';
   renderLists();
   syncFormHints();
 }
@@ -310,6 +318,8 @@ function readForm(e) {
     if (t.checked) set.add(t.value);
     else set.delete(t.value);
     state[key] = [...set];
+  } else if (t?.id === 'essayText') {
+    state.essayText = t.value;
   } else if (t && ['teacher1', 'teacher2', 'counselor'].includes(t.id)) {
     state.recs[t.id] = t.value;
   } else if (t && CHECK_FIELDS.includes(t.id)) {
@@ -485,6 +495,7 @@ function schoolDetail(r, profile) {
     ${testAdviceHtml(r, profile)}
     ${athleteNote(r)}
     ${r.missingTest ? '' : `<div class="detail-block"><h4>What moved your odds${round === r.early ? ` (${esc(s.early.plan)})` : ''}, compared with a typical applicant</h4><div class="contrib">${contribChart(r, round)}</div></div>`}
+    ${supplementsHtml(r)}
     <div class="detail-block"><h4>${esc(s.name)}</h4>${schoolFacts(s)}</div>
     <a href="#school-${s.id}" class="micro">Full school profile and sources</a>`;
 }
@@ -551,8 +562,13 @@ function renderResults() {
 }
 
 function renderEssayCheck() {
-  const res = checkEssay($('#essayText').value);
-  $('#essay-notes').innerHTML = res ? res.notes.map((n) => `<li class="${n.level}">${esc(n.text)}</li>`).join('') : '';
+  const text = state.essayText || '';
+  const res = checkEssay(text);
+  $('#essay-wc').textContent = res ? `${res.words} / 650 words` : '';
+  const g = state.essayGrade;
+  const stale = g && g.textKey !== textKey(text);
+  $('#essay-grade').innerHTML = g ? gradeHtml(g, { stale }) : '';
+  $('#essay-notes').innerHTML = res && !g ? res.notes.map((n) => `<li class="${n.level}">${esc(n.text)}</li>`).join('') : '';
 }
 
 // ------------------------------------------------------------ school data view
@@ -651,6 +667,14 @@ function renderMethod() {
     </table></div>
     <p>The likely range shown with each estimate adds and subtracts ${MODEL.band} in log-odds, roughly the uncertainty in rating your own essays and recommendations.</p>
 
+    <h3>Importing files and grading essays</h3>
+    <ul>
+      <li><b>Files.</b> PDF, Word (.docx), RTF and text files are read in your browser. A resume or activities list is split into its sections (activities, honors, work, research, summer programs); each entry's tier, category, years and weekly hours are inferred from its wording ("captain", "state finalist", "Grades 10–12", "6 hrs/week"). Check the filled-in rows: the tier is a judgment call.</li>
+      <li><b>With Claude.</b> When this page can ask Claude, files (including photos of a page) are read by Claude on your account instead, and essays are graded by Claude against the same 1–5 rubric. Without Claude, a pattern-based grader scores length, concrete detail, reflection, sentence variety, clichés and school-specific references. It cannot judge meaning, so treat its scores as a first pass.</li>
+      <li><b>Personal statement.</b> Grading fills in the voice, specificity, insight and craft sliders used at every school.</li>
+      <li><b>Supplements.</b> Each school's graded supplements replace the general "school fit" and "supplements" sliders for that school only. A supplement that names a different school gets a fit of 1.</li>
+    </ul>
+
     <h3>What the research says</h3>
     <ul>
       <li>In the Harvard admissions data released in court, recruited athletes were admitted at 86%, children of faculty at 47%, dean's-interest applicants at 42% and legacies at 34%, against under 5.5% for everyone else. Applicants in the top academic-index decile were admitted at only 13–15%.</li>
@@ -670,6 +694,344 @@ function renderMethod() {
 
     <h3>Sources</h3>
     <ol class="sources">${allSources.map((x) => `<li><a href="${esc(x.url)}" target="_blank" rel="noopener">${esc(x.label)}</a></li>`).join('')}</ol>`;
+}
+
+// ------------------------------------------------------------ Claude (when the page can ask it)
+
+const ai = { fn: null, images: false, off: false };
+const AI_OFF_CODES = ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired'];
+
+async function initAI() {
+  if (!window.claude?.use) return;
+  try {
+    const sample = await window.claude.use('sample');
+    if (!sample) return;
+    ai.fn = sample;
+    const limits = await sample.limits().catch(() => null);
+    ai.images = !!limits?.images;
+  } catch {
+    ai.fn = null;
+  }
+  renderAiNote();
+  renderResults();
+}
+
+const aiReady = () => !!ai.fn && !ai.off;
+
+async function askClaudeJson(prompt, options = {}) {
+  try {
+    return await ai.fn.json(prompt, options);
+  } catch (e) {
+    if (AI_OFF_CODES.includes(e?.code)) {
+      ai.off = true;
+      renderAiNote();
+    }
+    throw e;
+  }
+}
+
+function aiErrorText(e) {
+  const code = e?.code;
+  if (code === 'rate_limited') return 'Claude is busy or your usage limit was reached. Try again in a little while.';
+  if (code === 'invalid_json') return "Claude's answer couldn't be read. Try again.";
+  if (code === 'refused') return 'Claude declined to read this text.';
+  if (code === 'prompt_too_large') return 'This file is too long to send. Try a shorter excerpt.';
+  if (AI_OFF_CODES.includes(code)) return 'Claude is not available on this page, so the automatic method was used.';
+  return 'Claude could not be reached, so the automatic method was used.';
+}
+
+function renderAiNote() {
+  const el = $('#ai-note');
+  if (!el) return;
+  el.textContent = aiReady()
+    ? 'Files are read in your browser, then sent to Claude on your Claude account to extract your details and grade essays. Check the filled-in rows before relying on them.'
+    : 'Files are read in your browser and nothing is uploaded. Details are pulled out by matching common resume patterns, so check the filled-in rows and adjust tiers and levels.';
+  for (const b of $$('[data-grade-label]')) b.textContent = aiReady() ? 'Grade with Claude' : 'Grade';
+  $('#grade-essay').textContent = aiReady() ? 'Grade with Claude' : 'Grade my essay';
+}
+
+// ------------------------------------------------------------ grading
+
+const textKey = (t) => `${(t || '').length}:${(t || '').slice(0, 40)}:${(t || '').slice(-40)}`;
+
+const SCORE_LABELS = [
+  ['overall', 'Overall'], ['fit', 'School fit'], ['responsiveness', 'Answers the prompt'],
+  ['voice', 'Voice'], ['specificity', 'Specifics'], ['reflection', 'Insight'], ['craft', 'Craft'],
+];
+
+function gradeHtml(g, { stale = false } = {}) {
+  if (g.pending) return '<p class="grading">Grading… Claude usually takes 10–60 seconds.</p>';
+  const chips = SCORE_LABELS.filter(([k]) => g[k] != null)
+    .map(([k, label]) => `<span class="score ${k === 'overall' ? 'main' : ''}"><b>${g[k]}</b>/5 ${esc(label)}</span>`)
+    .join('');
+  const src = g.source === 'claude'
+    ? 'Graded by Claude'
+    : 'Automatic estimate from text patterns. It checks length, detail, reflection and school-specific references but cannot judge meaning.';
+  const list = (title, items) => (items?.length ? `<p class="grade-h">${title}</p><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+  const notes = (g.notes || []).filter((n) => n.level !== 'good').map((n) => n.text);
+  return `
+    <div class="scores">${chips}</div>
+    ${stale ? '<p class="stale">The text changed since this grade. Grade again to update it.</p>' : ''}
+    ${g.summary ? `<p>${esc(g.summary)}</p>` : ''}
+    ${list('Strengths', g.strengths)}
+    ${list('To improve', g.improvements.length ? g.improvements : notes)}
+    ${g.error ? `<p class="stale">${esc(g.error)}</p>` : ''}
+    <p class="micro">${esc(src)}</p>`;
+}
+
+async function grade(text, opts) {
+  if (aiReady()) {
+    try {
+      const raw = await askClaudeJson(aiGradePrompt(text, opts));
+      const local = gradeEssay(text, { limit: opts.limit, prompt: opts.prompt, schoolId: opts.school?.id });
+      const schoolOnly = opts.school ? {} : { fit: null, responsiveness: null, overall: null };
+      return normalizeGrade({ ...raw, ...schoolOnly, source: 'claude', notes: local?.notes ?? [] });
+    } catch (e) {
+      const g = gradeEssay(text, { limit: opts.limit, prompt: opts.prompt, schoolId: opts.school?.id });
+      if (g) g.error = aiErrorText(e);
+      return g;
+    }
+  }
+  return gradeEssay(text, { limit: opts.limit, prompt: opts.prompt, schoolId: opts.school?.id });
+}
+
+async function gradePersonalStatement() {
+  const text = (state.essayText || '').trim();
+  if (text.split(/\s+/).length < 50) {
+    $('#essay-grade').innerHTML = '<p class="stale">Paste or upload at least 50 words to grade.</p>';
+    return;
+  }
+  const btn = $('#grade-essay');
+  btn.disabled = true;
+  state.essayGrade = { pending: true };
+  renderEssayCheck();
+  const g = await grade(text, { limit: 650 });
+  btn.disabled = false;
+  if (!g) return;
+  g.textKey = textKey(state.essayText);
+  state.essayGrade = g;
+  for (const k of ['voice', 'specificity', 'reflection', 'craft']) {
+    if (g[k] != null) state.essay[k] = Math.min(5, Math.max(1, Math.round(g[k])));
+  }
+  state.example = false;
+  writeForm();
+  scheduleRender();
+}
+
+// ------------------------------------------------------------ supplements
+
+const suppList = (id) => (state.supplements[id] ||= []);
+
+function supplementsHtml(r) {
+  const s = r.school;
+  const list = state.supplements[s.id] || [];
+  const items = list
+    .map((x, i) => {
+      const words = (x.text || '').trim() ? x.text.trim().split(/\s+/).length : 0;
+      const over = x.limit && words > x.limit;
+      const stale = x.grade && !x.grade.pending && x.grade.textKey !== textKey(x.text);
+      return `
+        <div class="supp" data-supp-school="${s.id}" data-supp-index="${i}">
+          <div class="supp-row">
+            <label class="sub-label" for="supp-prompt-${s.id}-${i}">Prompt ${i + 1}</label>
+            <label class="limit">Word limit <input type="number" min="25" max="1000" step="25" id="supp-limit-${s.id}-${i}" data-supp-field="limit" value="${esc(x.limit)}"></label>
+          </div>
+          <textarea rows="2" id="supp-prompt-${s.id}-${i}" data-supp-field="prompt" placeholder="Paste the prompt from ${esc(s.short)}'s application">${esc(x.prompt)}</textarea>
+          <label class="visually-hidden" for="supp-text-${s.id}-${i}">Response</label>
+          <textarea rows="6" id="supp-text-${s.id}-${i}" data-supp-field="text" placeholder="Paste your response or upload a file">${esc(x.text)}</textarea>
+          <div class="supp-actions">
+            <span class="micro wc ${over ? 'over' : ''}" data-wc>${words}${x.limit ? ` / ${x.limit}` : ''} words</span>
+            <button type="button" class="btn upload" data-supp-act="upload">Upload file</button>
+            <button type="button" class="btn primary" data-supp-act="grade" data-grade-label>${aiReady() ? 'Grade with Claude' : 'Grade'}</button>
+            <button type="button" class="btn ghost" data-supp-act="remove">Remove</button>
+          </div>
+          ${x.grade ? `<div class="grade-out">${gradeHtml(x.grade, { stale })}</div>` : ''}
+        </div>`;
+    })
+    .join('');
+  const dims = r.supplementGrades;
+  const effect = dims
+    ? `<p class="advice">Your ${dims.count} graded ${dims.count === 1 ? 'supplement sets' : 'supplements set'} ${esc(s.short)}'s essay fit to ${dims.fit.toFixed(1)}/5 and supplement quality to ${dims.supplements.toFixed(1)}/5 in this estimate.</p>`
+    : '';
+  return `
+    <div class="detail-block supps">
+      <h4>Supplemental essays for ${esc(s.short)}</h4>
+      <p class="micro">Add each prompt and your response. Graded supplements replace the general "school fit" and "supplements" sliders for this school only.</p>
+      ${effect}
+      ${items}
+      <button type="button" class="btn add" data-supp-act="add">Add a supplemental essay</button>
+    </div>`;
+}
+
+async function gradeSupplement(id, i) {
+  const x = suppList(id)[i];
+  if (!x) return;
+  const text = (x.text || '').trim();
+  if (text.split(/\s+/).length < 25) {
+    alertSupp(id, i, 'Paste or upload at least 25 words to grade.');
+    return;
+  }
+  const school = SCHOOLS.find((s) => s.id === id);
+  x.grade = { pending: true };
+  renderSchools(lastResults, state);
+  const g = await grade(text, { limit: Number(x.limit) || 250, prompt: x.prompt || '', school });
+  const cur = suppList(id)[i];
+  if (cur !== x) return;
+  if (g) g.textKey = textKey(x.text);
+  x.grade = g;
+  saveState();
+  renderResults();
+}
+
+function alertSupp(id, i, msg) {
+  const el = $(`[data-supp-school="${id}"][data-supp-index="${i}"] [data-wc]`);
+  if (el) el.textContent = msg;
+}
+
+// ------------------------------------------------------------ file import
+
+let uploadTarget = null;
+let undoSnapshot = null;
+
+function openFilePicker(target) {
+  uploadTarget = target;
+  const input = $('#file-input');
+  input.accept = ACCEPT;
+  input.multiple = target.kind === 'auto';
+  input.value = '';
+  input.click();
+}
+
+async function readFileForImport(file, kind) {
+  if (isImage(file)) {
+    if (!aiReady() || !ai.images) throw new Error(`${file.name}: photos can only be read when Claude is available. Upload a PDF, Word or text file instead.`);
+    const data = await askClaudeJson(`${AI_EXTRACT_PROMPT('(The document is the attached image of a page.)', kind)}`, { images: [file] });
+    return { data: sanitizeImport(data), via: 'claude' };
+  }
+  const text = await fileToText(file);
+  if (!text.trim()) throw new Error(`${file.name}: no text found. A scanned PDF needs to be a photo upload with Claude, or retyped.`);
+  const type = kind === 'essay' ? 'essay' : kind === 'auto' ? classifyText(text) : 'list';
+  if (type === 'essay') return { data: { activities: [], honors: [], resume: null, essays: [text.trim()] }, via: 'local' };
+  if (aiReady()) {
+    try {
+      const data = await askClaudeJson(AI_EXTRACT_PROMPT(text, kind === 'auto' ? 'auto' : `${kind} list`));
+      return { data: sanitizeImport(data), via: 'claude' };
+    } catch (e) {
+      return { data: { ...parseProfileText(text, kind), essays: [] }, via: 'local', warning: aiErrorText(e) };
+    }
+  }
+  return { data: { ...parseProfileText(text, kind), essays: [] }, via: 'local' };
+}
+
+async function importFiles(files, kind) {
+  if (!files.length) return;
+  const log = $('#import-log');
+  const startSnapshot = clone(state);
+  if (state.example) {
+    Object.assign(state, {
+      example: false, activities: [], honors: [], research: 'none', program: 'none', workHours: '0',
+      internship: 'none', venture: 'none', portfolio: 'none',
+    });
+  }
+  log.innerHTML = [...files].map((f, i) => `<li id="import-${i}" class="pending">${esc(f.name)}: reading…</li>`).join('');
+  let changed = false;
+  let essayToGrade = false;
+  for (const [i, file] of [...files].entries()) {
+    const li = $(`#import-${i}`);
+    try {
+      const { data, via, warning } = await readFileForImport(file, kind);
+      const parts = [];
+      if (kind !== 'honors' && kind !== 'essay' && data.activities.length) {
+        const before = state.activities.filter((a) => String(a.name || '').trim()).length;
+        state.activities = mergeList(state.activities, data.activities, MAX_ACTIVITIES);
+        parts.push(`${state.activities.length - before} activities`);
+      }
+      if (kind !== 'activities' && kind !== 'essay' && data.honors.length) {
+        const before = state.honors.length;
+        state.honors = mergeList(state.honors, data.honors, MAX_HONORS);
+        parts.push(`${state.honors.length - before} honors`);
+      }
+      if ((kind === 'auto' || kind === 'resume') && data.resume) {
+        const cur = Object.fromEntries(['research', 'program', 'workHours', 'internship', 'venture', 'portfolio'].map((k) => [k, state[k]]));
+        const merged = mergeResume(cur, data.resume);
+        const updated = Object.keys(merged).filter((k) => merged[k] !== cur[k]);
+        Object.assign(state, merged);
+        if (updated.length) parts.push(`resume details (${updated.length})`);
+      }
+      if (data.essays?.length && (kind === 'auto' || kind === 'essay' || kind === 'resume')) {
+        state.essayText = data.essays[0];
+        state.essayGrade = null;
+        essayToGrade = true;
+        parts.push('personal statement');
+      }
+      changed = changed || parts.length > 0;
+      li.className = parts.length ? 'good' : 'warn';
+      li.textContent = parts.length
+        ? `${file.name}: added ${parts.join(', ')}${via === 'claude' ? ' (read by Claude)' : ''}.${warning ? ` ${warning}` : ''}`
+        : `${file.name}: nothing new found. Check that it's a resume, list or essay.`;
+    } catch (e) {
+      li.className = 'bad';
+      li.textContent = e?.code ? `${file.name}: ${aiErrorText(e)}` : e.message || `${file.name}: could not be read.`;
+    }
+  }
+  if (changed) {
+    undoSnapshot = startSnapshot;
+    $('#undo-import').hidden = false;
+  } else if (startSnapshot.example) {
+    state = startSnapshot;
+  }
+  writeForm();
+  scheduleRender();
+  if (essayToGrade) gradePersonalStatement();
+}
+
+async function importIntoSupplement(file, id, i) {
+  const x = suppList(id)[i];
+  if (!x) return;
+  try {
+    let text;
+    if (isImage(file)) {
+      if (!aiReady() || !ai.images) throw new Error('Photos can only be read when Claude is available. Upload a PDF, Word or text file.');
+      text = (await ai.fn('Transcribe the essay in this image exactly, with paragraph breaks. Reply with only the essay text.', { images: [file] })).text;
+    } else {
+      text = await fileToText(file);
+    }
+    x.text = text.trim();
+    x.grade = null;
+    saveState();
+    renderSchools(lastResults, state);
+    gradeSupplement(id, i);
+  } catch (e) {
+    alertSupp(id, i, e?.code ? aiErrorText(e) : e.message);
+  }
+}
+
+async function importEssayFile(file) {
+  try {
+    let text;
+    if (isImage(file)) {
+      if (!aiReady() || !ai.images) throw new Error('Photos can only be read when Claude is available. Upload a PDF, Word or text file.');
+      text = (await ai.fn('Transcribe the essay in this image exactly, with paragraph breaks. Reply with only the essay text.', { images: [file] })).text;
+    } else {
+      text = await fileToText(file);
+    }
+    state.essayText = text.trim();
+    state.essayGrade = null;
+    writeForm();
+    scheduleRender();
+    gradePersonalStatement();
+  } catch (e) {
+    $('#essay-grade').innerHTML = `<p class="stale">${esc(e?.code ? aiErrorText(e) : e.message)}</p>`;
+  }
+}
+
+function handlePickedFiles(files) {
+  const target = uploadTarget;
+  uploadTarget = null;
+  if (!target || !files.length) return;
+  if (target.kind === 'supp') importIntoSupplement(files[0], target.school, target.index);
+  else if (target.kind === 'essay') importEssayFile(files[0]);
+  else importFiles(files, target.kind);
 }
 
 // ------------------------------------------------------------ routing
@@ -755,6 +1117,73 @@ function bind() {
     });
   }
 
+  // File import
+  document.addEventListener('click', (e) => {
+    const up = e.target.closest('[data-upload]');
+    if (up) openFilePicker({ kind: up.dataset.upload });
+  });
+  $('#file-input').addEventListener('change', (e) => handlePickedFiles([...e.target.files]));
+  const dz = $('#dropzone');
+  dz.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dz.classList.add('over');
+  });
+  dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dz.classList.remove('over');
+    importFiles([...(e.dataTransfer?.files || [])], 'auto');
+  });
+  $('#undo-import').addEventListener('click', () => {
+    if (!undoSnapshot) return;
+    state = undoSnapshot;
+    undoSnapshot = null;
+    $('#undo-import').hidden = true;
+    $('#import-log').innerHTML = '<li>Import undone.</li>';
+    writeForm();
+    scheduleRender();
+  });
+  $('#grade-essay').addEventListener('click', gradePersonalStatement);
+
+  // Supplements inside each school's detail panel
+  const schoolList = $('#school-list');
+  schoolList.addEventListener('input', (e) => {
+    const field = e.target.dataset.suppField;
+    const box = e.target.closest('[data-supp-school]');
+    if (!field || !box) return;
+    const x = suppList(box.dataset.suppSchool)[Number(box.dataset.suppIndex)];
+    if (!x) return;
+    x[field] = field === 'limit' ? numOrBlank(e.target.value) : e.target.value;
+    const words = (x.text || '').trim() ? x.text.trim().split(/\s+/).length : 0;
+    const wc = box.querySelector('[data-wc]');
+    wc.textContent = `${words}${x.limit ? ` / ${x.limit}` : ''} words`;
+    wc.classList.toggle('over', !!x.limit && words > x.limit);
+    saveState();
+  });
+  schoolList.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-supp-act]');
+    if (!btn) return;
+    const block = btn.closest('.school-detail');
+    const id = block.id.replace('detail-', '');
+    const box = btn.closest('[data-supp-school]');
+    const i = box ? Number(box.dataset.suppIndex) : -1;
+    const act = btn.dataset.suppAct;
+    if (act === 'add') {
+      suppList(id).push({ prompt: '', limit: 250, text: '', grade: null });
+      saveState();
+      renderSchools(lastResults, state);
+      $(`#supp-prompt-${id}-${suppList(id).length - 1}`)?.focus();
+    } else if (act === 'remove') {
+      suppList(id).splice(i, 1);
+      saveState();
+      renderResults();
+    } else if (act === 'grade') {
+      gradeSupplement(id, i);
+    } else if (act === 'upload') {
+      openFilePicker({ kind: 'supp', school: id, index: i });
+    }
+  });
+
   window.addEventListener('hashchange', route);
 }
 
@@ -765,7 +1194,9 @@ function init() {
   renderMethod();
   bind();
   route();
+  renderAiNote();
   renderResults();
+  initAI();
 }
 
 init();

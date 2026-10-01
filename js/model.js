@@ -269,10 +269,29 @@ function resumeRating(profile) {
   return { rating: clamp(2.5 + 7.5 * (1 - Math.exp(-raw / 5)), 0, 10), research };
 }
 
-function essayRating(profile) {
+// Graded supplements for one school, mapped to the rubric's 1–5 "fit" and
+// "supplements" dimensions; null when none are graded.
+export function supplementDims(list) {
+  const graded = (Array.isArray(list) ? list : []).map((s) => s && s.grade).filter(Boolean);
+  if (!graded.length) return null;
+  const num = (x) => (isNum(Number(x)) && x != null ? clamp(Number(x), 1, 5) : null);
+  const overall = graded.map((g) => num(g.overall) ?? num(g.quality) ?? 3);
+  const fits = graded.map((g) => num(g.fit)).filter((x) => x != null);
+  const quality = graded.map((g, i) => {
+    const q = num(g.quality) ?? overall[i];
+    const r = num(g.responsiveness);
+    return r == null ? q : (q + r) / 2;
+  });
+  return { fit: fits.length ? avg(fits) : avg(overall), supplements: avg(quality), count: graded.length };
+}
+
+function essayRating(profile, schoolId = null) {
   const e = profile.essay || {};
   const ps = avg(['voice', 'specificity', 'reflection', 'craft'].map((k) => clamp(Number(e[k]) || 3, 1, 5)));
-  const supp = avg(['fit', 'supplements'].map((k) => clamp(Number(e[k]) || 3, 1, 5)));
+  const graded = schoolId ? supplementDims(profile.supplements?.[schoolId]) : null;
+  const supp = graded
+    ? avg([graded.fit, graded.supplements])
+    : avg(['fit', 'supplements'].map((k) => clamp(Number(e[k]) || 3, 1, 5)));
   return clamp(2 * (0.6 * ps + 0.4 * supp) - 1, 0, 10);
 }
 
@@ -504,6 +523,8 @@ export function scoreSchool(school, profile, base = profileRatings(profile)) {
   const hasInterview = base.interview != null;
 
   const ratings = { ...base, gpa: uc ? base.ucGpa : base.gpa, tests: null };
+  const supplementGrades = supplementDims(profile.supplements?.[school.id]);
+  if (supplementGrades) ratings.essays = essayRating(profile, school.id);
 
   // Work out which testing scenario applies.
   let testUsed = false;
@@ -554,7 +575,7 @@ export function scoreSchool(school, profile, base = profileRatings(profile)) {
     const used = w > 0 && r != null;
     return {
       key,
-      label,
+      label: key === 'essays' && supplementGrades ? 'Essays + your supplements' : label,
       rating: r,
       weight: used ? w / totalWeight : 0,
       logOdds: used ? (MODEL.beta * (w / totalWeight) * (r - 5)) / MODEL.poolSd : 0,
@@ -594,6 +615,7 @@ export function scoreSchool(school, profile, base = profileRatings(profile)) {
     calibration: cal,
     earlyMult: earlyMultiplier(school),
     athlete: has(profile.athlete, school.id),
+    supplementGrades,
   };
 }
 

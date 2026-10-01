@@ -39,6 +39,19 @@
             </div>
           </div>
 
+          <section class="import" id="import-card" aria-labelledby="import-title">
+            <div class="dropzone" id="dropzone">
+              <div class="dropzone-text">
+                <h2 id="import-title">Fill from your files</h2>
+                <p>Drop a resume, Common App activities list, honors list or essay. PDF, Word (.docx) and text files work; photos of a page work when Claude is available.</p>
+              </div>
+              <button type="button" class="btn primary" data-upload="auto">Choose files</button>
+            </div>
+            <p class="micro" id="ai-note"></p>
+            <ul class="import-log" id="import-log"></ul>
+            <button type="button" class="btn ghost" id="undo-import" hidden>Undo last import</button>
+          </section>
+
           <fieldset class="section" id="sec-academics">
             <legend><span class="sec-num">1</span> Grades &amp; coursework</legend>
             <p class="hint">Readers judge grades against the rigor of your schedule. Use your unweighted GPA.</p>
@@ -119,19 +132,28 @@
             <legend><span class="sec-num">3</span> Activities list</legend>
             <p class="hint">The Common App holds 10 activities. List them in order of importance and rate each honestly: most applicants have one or two tier 3 roles and several tier 4 ones.</p>
             <div id="activities-list" class="rows"></div>
-            <button type="button" class="btn add" id="add-activity">Add activity</button>
+            <div class="row-actions">
+              <button type="button" class="btn add" id="add-activity">Add activity</button>
+              <button type="button" class="btn upload" data-upload="activities">Upload activities list</button>
+            </div>
           </fieldset>
 
           <fieldset class="section" id="sec-honors">
             <legend><span class="sec-num">4</span> Honors &amp; awards</legend>
             <p class="hint">Up to five, at the highest level each one reached.</p>
             <div id="honors-list" class="rows"></div>
-            <button type="button" class="btn add" id="add-honor">Add honor</button>
+            <div class="row-actions">
+              <button type="button" class="btn add" id="add-honor">Add honor</button>
+              <button type="button" class="btn upload" data-upload="honors">Upload honors list</button>
+            </div>
           </fieldset>
 
           <fieldset class="section" id="sec-resume">
             <legend><span class="sec-num">5</span> Resume: research, work &amp; programs</legend>
-            <p class="hint">What a resume adds beyond your activities list. Don't count the same thing twice.</p>
+            <div class="hint-row">
+              <p class="hint">What a resume adds beyond your activities list. Don't count the same thing twice.</p>
+              <button type="button" class="btn upload" data-upload="resume">Upload resume</button>
+            </div>
             <div class="grid">
               <div class="field">
                 <label for="research">Research</label>
@@ -191,14 +213,21 @@
           <fieldset class="section" id="sec-essays">
             <legend><span class="sec-num">6</span> Essays</legend>
             <p class="hint">Rate your writing as a stranger would. 3 means clear and competent but not memorable, which describes most essays these schools read.</p>
-            <div class="sliders" id="essay-sliders"></div>
-            <details class="essay-check">
-              <summary>Paste your personal statement for a quick check</summary>
-              <p class="micro">Checked in your browser only; nothing is sent anywhere. This flags common problems but doesn't change your score.</p>
-              <label for="essayText" class="visually-hidden">Personal statement</label>
-              <textarea id="essayText" rows="8" placeholder="Paste your essay here"></textarea>
+            <div class="essay-box">
+              <div class="hint-row">
+                <label for="essayText" class="sub-label">Your personal statement</label>
+                <button type="button" class="btn upload" data-upload="essay">Upload essay</button>
+              </div>
+              <textarea id="essayText" rows="8" placeholder="Paste or upload your Common App personal statement (650 words max), then grade it to fill in the scores below."></textarea>
+              <div class="essay-actions">
+                <span class="micro" id="essay-wc"></span>
+                <button type="button" class="btn primary" id="grade-essay">Grade my essay</button>
+              </div>
+              <div id="essay-grade" class="grade-out" aria-live="polite"></div>
               <ul id="essay-notes" class="essay-notes"></ul>
-            </details>
+            </div>
+            <p class="micro">Grading sets the four personal-statement sliders. School fit and supplements are graded per school: open a school under "Your chances" and add its supplemental essays.</p>
+            <div class="sliders" id="essay-sliders"></div>
           </fieldset>
 
           <fieldset class="section" id="sec-recs">
@@ -309,6 +338,7 @@
     <p>Rankings: U.S. News &amp; World Report 2027 Best National Universities (September 2026). Admissions data: Common Data Sets 2025–26 and Class of 2030 reports, current as of October 2026. Not affiliated with any university or with U.S. News.</p>
   </footer>
 </div>
+<input type="file" id="file-input" multiple hidden>
 <!-- app:end -->
 <script type="module" src="js/app.js"></script>
 </body>
