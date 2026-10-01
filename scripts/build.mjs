@@ -45,10 +45,10 @@ const meta = pick(/<meta name="description"[^>]*>/, 'description meta');
 const fonts = [...html.matchAll(/<link rel="(?:preconnect|stylesheet)" href="https:\/\/fonts\.[^>]*>/g)].map((m) => m[0]).join('\n');
 const app = pick(/<!-- app:start -->[\s\S]*<!-- app:end -->/, 'app markers');
 
-const head = `${title}\n${meta}\n${fonts}\n<style>\n${css}\n</style>`;
+const head = `${title}\n${fonts}\n<style>\n${css}\n</style>`;
 const body = `${app}\n<script type="module">\n${script}\n</script>`;
 
-const full = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${head}\n</head>\n<body>\n${body}\n</body>\n</html>\n`;
+const full = `<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${meta}\n${head}\n</head>\n<body>\n${body}\n</body>\n</html>\n`;
 const fragment = `${head}\n${body}\n`;
 
 await mkdir(join(root, 'dist'), { recursive: true });
